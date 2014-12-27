@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"lanfile/client"
-	"lanfile/server"
-	"lanfile/message"
+	"lanfile/network/client"
+	"lanfile/network/server"
+	"lanfile/network/message"
 )
 
 func main() {

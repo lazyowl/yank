@@ -3,7 +3,7 @@ package server
 import (
 	"net"
 	"fmt"
-	"lanfile/message"
+	"lanfile/network/message"
 	//"golang.org/x/net/ipv4"
 )
 
