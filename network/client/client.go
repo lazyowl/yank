@@ -19,10 +19,10 @@ type Client struct {
 	ipv4_unicast_conn  *net.UDPConn
 	ipv4_multicast_conn  *net.UDPConn
 
-	app_msg chan message.Message
+	Recv_ch chan message.Response	// send from client to app
 }
 
-func NewClient(comm chan message.Message) (*Client, error) {
+func NewClient(comm chan message.Response) (*Client, error) {
 	// create a unicast ipv4 listener (listening on all available interfaces 0.0.0.0)
 	uconn4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if uconn4 == nil {
@@ -38,7 +38,7 @@ func NewClient(comm chan message.Message) (*Client, error) {
 	c := &Client {
 		ipv4_unicast_conn: uconn4,
 		ipv4_multicast_conn: mconn4,
-		app_msg: comm,
+		Recv_ch: make(chan message.Response),
 	}
 
 	vbox, err := net.InterfaceByName("vboxnet0")
@@ -65,7 +65,7 @@ func (c *Client) SetInterface(iface *net.Interface) error {
 }
 
 // multicast a query out
-func (c *Client) Send(m message.Message) {
+func (c *Client) SendMulticast(m message.Message) {
 	byteStream := message.ToJson(m)
 	c.ipv4_unicast_conn.WriteToUDP(byteStream, ipv4_addr)
 }
@@ -78,30 +78,18 @@ func (c *Client) ListenUnicast() {
 			fmt.Printf("[ERR] mdns: Failed to read packet: %v", err)
 			continue
 		}
-		fmt.Println("client unicast:", message.FromJson(buf[:n]), " from ", from)
+		c.Recv_ch <- message.Response{message.FromJson(buf[:n]), from}
 	}
 }
+
 func (c *Client) ListenMulticast() {
 	buf := make([]byte, 65536)
 	for {
-		n, err := c.ipv4_multicast_conn.Read(buf)
+		n, from, err := c.ipv4_multicast_conn.ReadFrom(buf)
 		if err != nil {
 			fmt.Printf("[ERR] mdns: Failed to read packet: %v", err)
 			continue
 		}
-		fmt.Println("client multicast:", message.FromJson(buf[:n]))
-	}
-}
-
-func (c *Client) StartLoop() {
-	go c.ListenUnicast()
-	go c.ListenMulticast()
-
-	for {
-		select {
-			case msg := <-c.app_msg: {
-				c.Send(msg)
-			}
-		}
+		c.Recv_ch <- message.Response{message.FromJson(buf[:n]), from}
 	}
 }

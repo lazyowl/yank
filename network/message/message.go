@@ -2,10 +2,22 @@ package message
 
 import (
 	"encoding/json"
+	"net"
+)
+
+const (
+	QUERY = iota
+	FETCH
 )
 
 type Message struct {
+	Type int
 	Value string
+}
+
+type Response struct {
+	Msg Message
+	From net.Addr
 }
 
 func ToJson(m Message) []byte {
@@ -17,4 +29,9 @@ func FromJson(b []byte) Message {
 	var msg Message
 	json.Unmarshal(b, &msg)
 	return msg
+}
+
+func CreateQueryMessage(query string) Message {
+	m := Message{QUERY, query}
+	return m
 }

@@ -2,9 +2,7 @@ package server
 
 import (
 	"net"
-	"fmt"
 	"lanfile/network/message"
-	//"golang.org/x/net/ipv4"
 )
 
 const (
@@ -15,17 +13,12 @@ var (
 	ipv4_addr = &net.UDPAddr{IP: net.ParseIP(ipv4_mdns), Port: mdns_port}
 )
 
-type Response struct {
-	msg message.Message
-	from net.Addr
-}
-
 type Server struct {
 	ipv4_listener *net.UDPConn
-	recv_ch chan Response
+	Recv_ch chan message.Response
 }
 
-func NewServer(comm chan message.Message) (*Server, error) {
+func NewServer(comm chan message.Response) (*Server, error) {
 	ipv4_listener, err := net.ListenMulticastUDP("udp4", nil, ipv4_addr)
 	if ipv4_listener == nil {
 		return nil, err
@@ -33,7 +26,7 @@ func NewServer(comm chan message.Message) (*Server, error) {
 
 	s := &Server {
 		ipv4_listener: ipv4_listener,
-		recv_ch: make(chan Response),
+		Recv_ch: comm,
 	}
 
 	return s, nil
@@ -46,19 +39,7 @@ func (s *Server) Listen() {
 		if err != nil {
 			continue
 		}
-		s.recv_ch <- Response{message.FromJson(buf[:n]), from}
-	}
-}
-
-func (s *Server) StartLoop() {
-	go s.Listen()
-	for {
-		select {
-			case msg := <-s.recv_ch: {
-				fmt.Println("server received ", msg.msg, msg.from)
-				s.SendUnicast(msg.from, message.Message{"this is my response!"})
-			}
-		}
+		s.Recv_ch <- message.Response{message.FromJson(buf[:n]), from}
 	}
 }
 
