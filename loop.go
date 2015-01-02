@@ -1,30 +1,57 @@
 package main
 
 import (
+	"os"
 	"fmt"
 	"lanfile/network/client"
 	"lanfile/network/server"
 	"lanfile/network/message"
+	"lanfile/config"
+	"lanfile/ui"
 )
 
 func main() {
 	fmt.Println("Hello!")
 
-	ch_c := make(chan message.Message)
+	// read configuration
+	err_read := config.Read_config()
+	fmt.Println(err_read)
+
+	// client
+	ch_c := make(chan message.Response)
 	c, err_c := client.NewClient(ch_c)
-	fmt.Println(err_c)
-	go c.StartLoop()
+	if err_c != nil {
+		fmt.Println(err_c)
+		os.Exit(1)
+	}
+	go c.ListenUnicast()
+	go c.ListenMulticast()
 
-	ch_s := make(chan message.Message)
+	// server
+	ch_s := make(chan message.Response)
 	s, err_s := server.NewServer(ch_s)
-	fmt.Println(err_s)
-	go s.StartLoop()
+	if err_s != nil {
+		fmt.Println(err_s)
+		os.Exit(1)
+	}
+	go s.Listen()
 
+	// stdin IO
+	io_struct := ui.NewIO()
+	go io_struct.StdinListen()
 
+	// main loop
 	for {
-		var s string
-		fmt.Scanf("%s", &s)
-		m := message.Message{s}
-		ch_c <- m
+		select {
+			case server_msg := <-s.Recv_ch: {
+				fmt.Println(server_msg)
+			}
+			case client_msg := <-c.Recv_ch: {
+				fmt.Println("client listen:", client_msg)
+			}
+			case inp := <-io_struct.IO_chan: {
+				c.SendMulticast(message.CreateQueryMessage(inp))
+			}
+		}
 	}
 }
