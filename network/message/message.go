@@ -35,3 +35,8 @@ func CreateQueryMessage(query string) Message {
 	m := Message{QUERY, query}
 	return m
 }
+
+func CreateMessage(typ int, val string) Message {
+	m := Message{typ, val}
+	return m
+}

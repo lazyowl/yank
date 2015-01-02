@@ -41,7 +41,7 @@ func NewClient(comm chan message.Response) (*Client, error) {
 		Recv_ch: make(chan message.Response),
 	}
 
-	vbox, err := net.InterfaceByName("vboxnet0")
+	vbox, err := net.InterfaceByName("eth0")
 	c.SetInterface(vbox)
 
 	return c, nil

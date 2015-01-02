@@ -8,8 +8,11 @@ import (
 
 const CONFIG_FILE_PATH = "lanfile_config.txt"
 
+var Config Configuration
+
 type Configuration struct {
 	Name string
+	Public_dir string
 }
 
 func Read_config() error {
@@ -18,11 +21,11 @@ func Read_config() error {
 		return file_err
 	}
 	decoder := json.NewDecoder(file)
-	configuration := Configuration{}
-	err := decoder.Decode(&configuration)
+	Config = Configuration{}
+	err := decoder.Decode(&Config)
 	if err != nil {
 		return err
 	}
-	fmt.Println(configuration.Name)
+	fmt.Println(Config.Name)
 	return nil
 }

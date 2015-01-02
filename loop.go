@@ -6,7 +6,8 @@ import (
 	"lanfile/network/client"
 	"lanfile/network/server"
 	"lanfile/network/message"
-	"lanfile/config"
+	"lanfile/managers/config"
+	"lanfile/managers/file_control"
 	"lanfile/ui"
 )
 
@@ -39,6 +40,10 @@ func main() {
 	// stdin IO
 	io_struct := ui.NewIO()
 	go io_struct.StdinListen()
+
+	fc := file_control.File_controller{}
+	l := fc.List_public_files()
+	fmt.Println(l)
 
 	// main loop
 	for {
