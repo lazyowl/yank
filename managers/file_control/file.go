@@ -16,7 +16,7 @@ type MyFile struct {
 }
 
 func (f *MyFile) String() string {
-	return fmt.Sprintf("name=%s, %%complete=%d%%, size=%d", f.Name, f.Percent_complete(), f.Size)
+	return fmt.Sprintf("%s (%s): %dB, %%complete=%d%%", f.Name, f.Full_hash, f.Size, f.Percent_complete())
 }
 
 func (f *MyFile) Serialize() []byte {

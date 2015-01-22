@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -30,8 +29,5 @@ func Read_config() error {
 		return err
 	}
 	Config.Public_dir, _ = filepath.Abs(Config.Public_dir)
-	fmt.Println(Config.Name)
-	fmt.Println(Config.Public_dir)
-	fmt.Println(Config.Meta_dir)
 	return nil
 }
