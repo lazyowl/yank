@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"fmt"
 	"lanfile/network/client"
 	"lanfile/network/server"
@@ -10,13 +9,18 @@ import (
 	"lanfile/managers/file_control"
 	"lanfile/ui"
 	"encoding/json"
+	"log"
 )
 
-
+const (
+	LIST = 0
+	LIST_REPLY = 1
+)
 
 type HighMessage struct {
 	Cmd int
 	Files []*file_control.MyFile
+	Source string
 }
 
 func (m HighMessage) Serialize() string {
@@ -35,14 +39,15 @@ func main() {
 
 	// read configuration
 	err_read := config.Read_config()
-	fmt.Println(err_read)
+	if err_read != nil {
+		log.Fatal(err_read)
+	}
 
 	// client
 	ch_c := make(chan message.Response)
 	c, err_c := client.NewClient(ch_c)
 	if err_c != nil {
-		fmt.Println(err_c)
-		os.Exit(1)
+		log.Fatal(err_c)
 	}
 	go c.ListenUnicast()
 	go c.ListenMulticast()
@@ -51,8 +56,7 @@ func main() {
 	ch_s := make(chan message.Response)
 	s, err_s := server.NewServer(ch_s)
 	if err_s != nil {
-		fmt.Println(err_s)
-		os.Exit(1)
+		log.Fatal(err_s)
 	}
 	go s.Listen()
 
@@ -68,18 +72,16 @@ func main() {
 		select {
 			case server_msg := <-s.Recv_ch: {
 				high_msg := Deserialize(server_msg.Msg.Value)
-				fmt.Println(high_msg)
-				if high_msg.Cmd == 0 {
-					response := HighMessage{1, fc.List_local_files()}
+				if high_msg.Cmd == LIST {
+					response := HighMessage{LIST_REPLY, fc.List_local_files(), config.Config.Name}
 					msg := message.Message{0, response.Serialize()}
 					s.SendUnicast(server_msg.From, msg)
 				}
 			}
 			case client_msg := <-c.Recv_ch: {
-				fmt.Println("client listen:", client_msg)
 				high_msg := Deserialize(client_msg.Msg.Value)
-				fmt.Println(high_msg)
-				if high_msg.Cmd == 1 {
+				if high_msg.Cmd == LIST_REPLY {
+					fmt.Println("===>", high_msg.Source)
 					for _, f := range high_msg.Files {
 						fmt.Println(f)
 					}
@@ -87,15 +89,9 @@ func main() {
 			}
 			case inp := <-io_struct.IO_chan: {
 				if inp == "ls" {
-					files := fc.List_local_files()
-					fmt.Println(len(files), "files")
-					for _, f := range files {
-						fmt.Println(f)
-					}
-					fmt.Println("===")
+					m := HighMessage{LIST, nil, config.Config.Name}
+					c.SendMulticast(message.CreateMessage(0, m.Serialize()))
 				}
-				m := HighMessage{}
-				c.SendMulticast(message.CreateMessage(0, m.Serialize()))
 			}
 		}
 	}
