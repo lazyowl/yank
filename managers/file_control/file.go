@@ -11,7 +11,7 @@ import (
 type MyFile struct {
 	Name string				// file name
 	Full_hash string		// hash of entire file
-	Hash_bit_vector uint64	// bit vector describing how many of these are present on the current machine
+	Hash_bit_vector Bit_vector	// bit vector describing how many of these are present on the current machine
 	Size int
 }
 
@@ -30,20 +30,16 @@ func Deserialize(serial []byte) *MyFile {
 	return &f
 }
 
-func (f *MyFile) Percent_complete() int {
-	count := 0
-	one := uint64(0x01)
+func (f *MyFile) Get_num_blocks() int {
 	var num_blocks int
 	if f.Size % CHUNK_SIZE == 0 {
 		num_blocks = f.Size / CHUNK_SIZE
 	} else {
 		num_blocks = f.Size / CHUNK_SIZE + 1
 	}
-	for i := 0; i < num_blocks; i++ {
-		if (f.Hash_bit_vector & one) > 0 {
-			count++
-		}
-		one <<= 1
-	}
-	return 100 * count / num_blocks
+	return num_blocks
+}
+
+func (f *MyFile) Percent_complete() int {
+	return f.Hash_bit_vector.Percent_set(f.Get_num_blocks())
 }
