@@ -23,13 +23,12 @@ func (fc File_controller) Init() chan bool {
 	}
 	done := make(chan bool)
 	go func() {
-		log.Println("started watcher!")
 		for {
 			select {
 				case event := <-fc.watcher.Events: {
 					log.Println(event)
 					if event.Op&fsnotify.Write == fsnotify.Write {
-						fc.Generate_MyFile_entry(event.Name)
+						fc.generate_MyFile_entry(event.Name)
 					}
 					if event.Op&fsnotify.Remove == fsnotify.Remove {
 						fc.Destroy_file(event.Name)
@@ -69,7 +68,7 @@ func (fc File_controller) write_MyFile(f *MyFile) error {
 
 
 // assumes the entire file is present locally (to be used when locally creating a new public file)
-func (fc File_controller) Generate_MyFile_entry(filename string) (*MyFile, error) {
+func (fc File_controller) generate_MyFile_entry(filename string) (*MyFile, error) {
 	fmt.Println("Generate_MyFile_entry:", filename)
 	b, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -79,8 +78,8 @@ func (fc File_controller) Generate_MyFile_entry(filename string) (*MyFile, error
 	full_hash := Hash(b)
 
 	// bit vector has all ones since we have the file
-	file := MyFile{filepath.Base(filename), full_hash, 0xffffffff, len(b)}
-	fmt.Println("FILENAME IS ", file.Name, file.Size)
+	file := MyFile{filepath.Base(filename), full_hash, Bit_vector_ones(), len(b)}
+	fmt.Println("FILENAME IS ", file.Name, file.Size, file.Hash_bit_vector)
 
 	err = fc.write_MyFile(&file)
 	if err != nil {
@@ -90,6 +89,8 @@ func (fc File_controller) Generate_MyFile_entry(filename string) (*MyFile, error
 	return &file, nil
 }
 
+
+/* Publicly available */
 func (fc File_controller) Destroy_file(name string) bool {
 	file_contents, err := ioutil.ReadFile(name)
 	if err != nil {
@@ -98,7 +99,7 @@ func (fc File_controller) Destroy_file(name string) bool {
 		return false
 	}
 	f := Deserialize(file_contents)
-	f.Hash_bit_vector = 0x00
+	f.Hash_bit_vector = Bit_vector_zero()
 	err = fc.write_MyFile(f)
 	if err != nil {
 		log.Fatal(err)
@@ -120,4 +121,15 @@ func (fc File_controller) List_local_files() []*MyFile {
 		}
 	}
 	return files
+}
+
+/* TODO need to improve this */
+func (fc File_controller) Get_file_from_hash(hash string) *MyFile {
+	files := fc.List_local_files()
+	for _, f := range files {
+		if f.Full_hash == hash {
+			return f
+		}
+	}
+	return nil
 }
