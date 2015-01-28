@@ -11,6 +11,7 @@ const (
 	LIST_LOCAL_CMD = -1
 	LIST_CMD = 0
 	GET_CMD = 1
+	LIST_USERS_CMD = 2
 )
 
 type Command struct {
@@ -35,17 +36,28 @@ func (i *IO) StdinListen() {
 		bio := bufio.NewReader(os.Stdin)
 		line, _, _:= bio.ReadLine()
 		toks := strings.Split(string(line), " ")
-		if toks[0] == "ls" {
-			i.IO_chan <- Command{LIST_CMD, ""}
-			<-i.IO_cmd_complete
-		} else if toks[0] == "get" && len(toks) > 1 {
-			i.IO_chan <- Command{GET_CMD, toks[1]}
-			<-i.IO_cmd_complete
-		} else if toks[0] == "lls" {
-			i.IO_chan <- Command{LIST_LOCAL_CMD, ""}
-			<-i.IO_cmd_complete
-		} else {
-			fmt.Println("Invalid command!")
+		switch toks[0] {
+			case "ls": {
+				i.IO_chan <- Command{LIST_CMD, ""}
+				<-i.IO_cmd_complete
+			}
+			case "get": {
+				if len(toks) > 1 {
+					i.IO_chan <- Command{GET_CMD, toks[1]}
+					<-i.IO_cmd_complete
+				}
+			}
+			case "lls": {
+				i.IO_chan <- Command{LIST_LOCAL_CMD, ""}
+				<-i.IO_cmd_complete
+			}
+			case "lu": {
+				i.IO_chan <- Command{LIST_USERS_CMD, ""}
+				<-i.IO_cmd_complete
+			}
+			default: {
+				fmt.Println("Invalid command!")
+			}
 		}
 	}
 }

@@ -2,20 +2,24 @@ package main
 
 import (
 	"fmt"
-	"lanfile/network/client"
-	"lanfile/network/server"
-	"lanfile/network/message"
+	"lanfile/network/messaging"
 	"lanfile/managers/config"
 	"lanfile/managers/file_control"
+	"lanfile/managers/hostcache"
+	"lanfile/util"
 	"lanfile/ui"
 	"encoding/json"
 	"log"
 	"time"
+	"flag"
 )
 
 const (
+	WAIT_DURATION = 2
 	LIST = 0
 	LIST_REPLY = 1
+	PING = 2
+	PING_REPLY
 )
 
 type HighMessage struct {
@@ -38,6 +42,9 @@ func Deserialize(b string) HighMessage {
 func main() {
 	fmt.Println("Hello!")
 
+	ip_flag := flag.String("iface", "lo", "preferred interface")
+	flag.Parse()
+
 	// read configuration
 	err_read := config.Read_config()
 	if err_read != nil {
@@ -45,17 +52,22 @@ func main() {
 	}
 
 	// client
-	ch_c := make(chan message.Response)
-	c, err_c := client.NewClient(ch_c)
+	ch_c := make(chan messaging.Response)
+	c, err_c := messaging.NewClient(*ip_flag, ch_c)
 	if err_c != nil {
 		log.Fatal(err_c)
 	}
 	go c.ListenUnicast()
 	go c.ListenMulticast()
 
+	// ping
+	ping := HighMessage{PING, nil, config.Config.Name}
+	msg := messaging.CreateMessage(0, ping.Serialize())
+	c.SendMulticast(msg)
+
 	// server
-	ch_s := make(chan message.Response)
-	s, err_s := server.NewServer(ch_s)
+	ch_s := make(chan messaging.Response)
+	s, err_s := messaging.NewServer(*ip_flag, ch_s)
 	if err_s != nil {
 		log.Fatal(err_s)
 	}
@@ -68,20 +80,64 @@ func main() {
 	fc := file_control.File_controller{}
 	fc.Init()
 
+	// host cache
+	hc := hostcache.New_hostcache()
+
 	kill_server := make(chan bool)
 	go func() {
 		for {
 			select {
 				case server_msg := <-s.Recv_ch: {
 					high_msg := Deserialize(server_msg.Msg.Value)
-					if high_msg.Cmd == LIST {
-						response := HighMessage{LIST_REPLY, fc.List_local_files(), config.Config.Name}
-						msg :=message.CreateMessage(0, response.Serialize())
-						s.SendUnicast(server_msg.From, msg)
+					switch high_msg.Cmd {
+						case LIST: {
+							response := HighMessage{LIST_REPLY, fc.List_local_files(), config.Config.Name}
+							msg := messaging.CreateMessage(0, response.Serialize())
+							s.SendUnicast(server_msg.From, msg)
+						}
+						case PING: {
+							// update ARP cache
+							high_msg := Deserialize(server_msg.Msg.Value)
+							hc.Put(high_msg.Source, server_msg.From)
+
+							// respond with a PING_REPLY so that the pinger can update his cache
+							response := HighMessage{PING_REPLY, nil, config.Config.Name}
+							msg := messaging.CreateMessage(0, response.Serialize())
+							s.SendUnicast(server_msg.From, msg)
+						}
 					}
 				}
 				case <-kill_server: {
-					break
+					return
+				}
+			}
+		}
+	}()
+
+	kill_client := make(chan bool)
+	io_chan := make(chan HighMessage)
+
+	io_expected := util.New_atomicflag()
+
+	go func() {
+		for {
+			select {
+				case client_msg := <-c.Recv_ch: {
+					high_msg := Deserialize(client_msg.Msg.Value)
+
+					switch high_msg.Cmd {
+						case LIST_REPLY: {
+							if io_expected.Get() {
+								io_chan <- high_msg
+							}
+						}
+						case PING_REPLY: {
+							hc.Put(high_msg.Source, client_msg.From)
+						}
+					}
+				}
+				case <-kill_client: {
+					return
 				}
 			}
 		}
@@ -94,20 +150,23 @@ func main() {
 		switch inp.Op {
 			case ui.LIST_CMD: {
 				m := HighMessage{LIST, nil, config.Config.Name}
-				c.SendMulticast(message.CreateMessage(0, m.Serialize()))
-				timer := time.NewTimer(time.Second * 5)
+				c.SendMulticast(messaging.CreateMessage(0, m.Serialize()))
+				timer := time.NewTimer(time.Second * WAIT_DURATION)
 				replies := []HighMessage{}
 				reply_wait := true
+
+				io_expected.Set(true)
+
 				for {
 					select {
-						case client_msg := <-c.Recv_ch: {
-							high_msg := Deserialize(client_msg.Msg.Value)
+						case high_msg := <-io_chan: {
 							if high_msg.Cmd == LIST_REPLY {
 								replies = append(replies, high_msg)
 							}
 						}
 						case <-timer.C: {
 							reply_wait = false
+							io_expected.Set(false)
 							break
 						}
 					}
@@ -125,6 +184,12 @@ func main() {
 				l := fc.List_local_files()
 				for _, f := range l {
 					fmt.Println(f)
+				}
+			}
+			case ui.LIST_USERS_CMD: {
+				users := hc.Get_cache()
+				for k, v := range users {
+					fmt.Println(k, v)
 				}
 			}
 		}
