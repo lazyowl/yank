@@ -1,30 +1,21 @@
-package client
+package messaging
 
 import (
 	"net"
 	"fmt"
-	"lanfile/network/message"
 	"golang.org/x/net/ipv4"
-)
-
-const (
-	ipv4_mdns = "224.0.0.251"
-	mdns_port = 5353
-)
-var (
-	ipv4_addr = &net.UDPAddr{IP: net.ParseIP(ipv4_mdns), Port: mdns_port}
 )
 
 type Client struct {
 	ipv4_unicast_conn  *net.UDPConn
 	ipv4_multicast_conn  *net.UDPConn
 
-	Recv_ch chan message.Response	// send from client to app
+	Recv_ch chan Response	// send from client to app
 }
 
-func NewClient(comm chan message.Response) (*Client, error) {
+func NewClient(iface string, comm chan Response) (*Client, error) {
 	// create a unicast ipv4 listener (listening on all available interfaces 0.0.0.0)
-	uconn4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	uconn4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(iface), Port: 0})
 	if uconn4 == nil {
 		return nil, err
 	}
@@ -38,10 +29,10 @@ func NewClient(comm chan message.Response) (*Client, error) {
 	c := &Client {
 		ipv4_unicast_conn: uconn4,
 		ipv4_multicast_conn: mconn4,
-		Recv_ch: make(chan message.Response),
+		Recv_ch: make(chan Response),
 	}
 
-	vbox, err := net.InterfaceByName("eth0")
+	vbox, err := net.InterfaceByName(iface)
 	c.SetInterface(vbox)
 
 	return c, nil
@@ -65,8 +56,8 @@ func (c *Client) SetInterface(iface *net.Interface) error {
 }
 
 // multicast a query out
-func (c *Client) SendMulticast(m message.Message) {
-	byteStream := message.ToJson(m)
+func (c *Client) SendMulticast(m Message) {
+	byteStream := ToJson(m)
 	c.ipv4_unicast_conn.WriteToUDP(byteStream, ipv4_addr)
 }
 
@@ -78,7 +69,7 @@ func (c *Client) ListenUnicast() {
 			fmt.Printf("[ERR] mdns: Failed to read packet: %v", err)
 			continue
 		}
-		c.Recv_ch <- message.Response{message.FromJson(buf[:n]), from}
+		c.Recv_ch <- Response{FromJson(buf[:n]), from}
 	}
 }
 
@@ -90,6 +81,6 @@ func (c *Client) ListenMulticast() {
 			fmt.Printf("[ERR] mdns: Failed to read packet: %v", err)
 			continue
 		}
-		c.Recv_ch <- message.Response{message.FromJson(buf[:n]), from}
+		c.Recv_ch <- Response{FromJson(buf[:n]), from}
 	}
 }
