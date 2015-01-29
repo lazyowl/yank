@@ -13,9 +13,9 @@ type Client struct {
 	Recv_ch chan Response	// send from client to app
 }
 
-func NewClient(iface string, comm chan Response) (*Client, error) {
+func NewClient(comm chan Response) (*Client, error) {
 	// create a unicast ipv4 listener (listening on all available interfaces 0.0.0.0)
-	uconn4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(iface), Port: 0})
+	uconn4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if uconn4 == nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func NewClient(iface string, comm chan Response) (*Client, error) {
 		Recv_ch: make(chan Response),
 	}
 
-	vbox, err := net.InterfaceByName(iface)
+	vbox, err := net.InterfaceByName("vboxnet0")
 	c.SetInterface(vbox)
 
 	return c, nil
@@ -77,6 +77,7 @@ func (c *Client) ListenMulticast() {
 	buf := make([]byte, 65536)
 	for {
 		n, from, err := c.ipv4_multicast_conn.ReadFrom(buf)
+		fmt.Println("got some stuff!")
 		if err != nil {
 			fmt.Printf("[ERR] mdns: Failed to read packet: %v", err)
 			continue

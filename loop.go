@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"log"
 	"time"
-	"flag"
 )
 
 const (
@@ -42,9 +41,6 @@ func Deserialize(b string) HighMessage {
 func main() {
 	fmt.Println("Hello!")
 
-	ip_flag := flag.String("iface", "lo", "preferred interface")
-	flag.Parse()
-
 	// read configuration
 	err_read := config.Read_config()
 	if err_read != nil {
@@ -53,7 +49,7 @@ func main() {
 
 	// client
 	ch_c := make(chan messaging.Response)
-	c, err_c := messaging.NewClient(*ip_flag, ch_c)
+	c, err_c := messaging.NewClient(ch_c)
 	if err_c != nil {
 		log.Fatal(err_c)
 	}
@@ -67,7 +63,7 @@ func main() {
 
 	// server
 	ch_s := make(chan messaging.Response)
-	s, err_s := messaging.NewServer(*ip_flag, ch_s)
+	s, err_s := messaging.NewServer(ch_s)
 	if err_s != nil {
 		log.Fatal(err_s)
 	}
