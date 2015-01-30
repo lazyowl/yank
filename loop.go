@@ -54,7 +54,6 @@ func main() {
 		log.Fatal(err_c)
 	}
 	go c.ListenUnicast()
-	go c.ListenMulticast()
 
 	// ping
 	ping := HighMessage{PING, nil, config.Config.Name}

@@ -21,8 +21,8 @@ func New_table() *Stdout_table {
 }
 
 func (table *Stdout_table) Display() {
-	fmt.Println("Names\n%c/l/m\nUsers\nFull hash\n")
+	fmt.Println("Names\t%c/l/m\tUsers\tFull hash\n")
 	for _, r := range table.Records {
-		fmt.Printf("%v\n%d/%d/%d\n%v\n%s\n\n", r.Names, r.Percent_complete, r.Percent_local, r.Max_complete, r.Users, r.Full_hash)
+		fmt.Printf("%v\t%d/%d/%d\t%v\t%s\n", r.Names, r.Percent_complete, r.Percent_local, r.Max_complete, r.Users, r.Full_hash)
 	}
 }
