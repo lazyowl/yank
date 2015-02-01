@@ -6,21 +6,22 @@ import (
 	"path/filepath"
 )
 
-const CONFIG_FILE_PATH = "./lanfile_config.txt"
+const CONFIG_FILE_PATH = "./config.txt"
 
 var Config Configuration
 
 type Configuration struct {
 	Name string
-	Public_dir string
-	Meta_dir string
+	PublicDir string
+	MetaDir string
 }
 
-func Read_config() error {
+// ReadConfig reads the configuration file and exposes a Configuration object for others to use
+func ReadConfig() error {
 	abspath, _ := filepath.Abs(CONFIG_FILE_PATH)
-	file, file_err := os.Open(abspath)
-	if file_err != nil {
-		return file_err
+	file, fileErr := os.Open(abspath)
+	if fileErr != nil {
+		return fileErr
 	}
 	decoder := json.NewDecoder(file)
 	Config = Configuration{}
@@ -28,6 +29,7 @@ func Read_config() error {
 	if err != nil {
 		return err
 	}
-	Config.Public_dir, _ = filepath.Abs(Config.Public_dir)
+	Config.PublicDir, _ = filepath.Abs(Config.PublicDir)
+	Config.MetaDir, _ = filepath.Abs(Config.MetaDir)
 	return nil
 }

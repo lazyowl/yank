@@ -1,4 +1,4 @@
-package file_control
+package fileManager
 
 import (
 	"encoding/hex"

@@ -19,17 +19,21 @@ type Command struct {
 	Arg string
 }
 
+// IO is used for communicating with application
 type IO struct {
-	IO_chan chan Command
-	IO_cmd_complete chan bool
+	IOChan chan Command
+	IOCmdComplete chan bool
 }
 
+// NewIO creates a new IO struct
 func NewIO() *IO {
 	ch := make(chan Command)
 	ch1 := make(chan bool)
 	return &IO{ch, ch1}
 }
 
+// StdinListen listens for stdin on the custom prompt and sends it up via IOChan.
+// It waits for an ACK from IOCmdComplete before displaying the next prompt
 func (i *IO) StdinListen() {
 	for {
 		fmt.Printf("$ ")
@@ -38,22 +42,22 @@ func (i *IO) StdinListen() {
 		toks := strings.Split(string(line), " ")
 		switch toks[0] {
 			case "ls": {
-				i.IO_chan <- Command{LIST_CMD, ""}
-				<-i.IO_cmd_complete
+				i.IOChan <- Command{LIST_CMD, ""}
+				<-i.IOCmdComplete
 			}
 			case "get": {
 				if len(toks) > 1 {
-					i.IO_chan <- Command{GET_CMD, toks[1]}
-					<-i.IO_cmd_complete
+					i.IOChan <- Command{GET_CMD, toks[1]}
+					<-i.IOCmdComplete
 				}
 			}
 			case "lls": {
-				i.IO_chan <- Command{LIST_LOCAL_CMD, ""}
-				<-i.IO_cmd_complete
+				i.IOChan <- Command{LIST_LOCAL_CMD, ""}
+				<-i.IOCmdComplete
 			}
 			case "lu": {
-				i.IO_chan <- Command{LIST_USERS_CMD, ""}
-				<-i.IO_cmd_complete
+				i.IOChan <- Command{LIST_USERS_CMD, ""}
+				<-i.IOCmdComplete
 			}
 			default: {
 				fmt.Println("Invalid command!")

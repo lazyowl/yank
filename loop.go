@@ -1,13 +1,14 @@
+// Package main contains the loops for listening and sending messages.
 package main
 
 import (
 	"fmt"
-	"lanfile/network/messaging"
-	"lanfile/managers/config"
-	"lanfile/managers/file_control"
-	"lanfile/managers/hostcache"
-	"lanfile/util"
-	"lanfile/ui"
+	"yank/network/messaging"
+	"yank/managers/config"
+	"yank/managers/fileManager"
+	"yank/managers/hostcache"
+	"yank/util"
+	"yank/ui"
 	"encoding/json"
 	"log"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 const (
 	WAIT_DURATION = 2
+
 	LIST = 0
 	LIST_REPLY = 1
 	PING = 2
@@ -23,115 +25,121 @@ const (
 
 type HighMessage struct {
 	Cmd int
-	Files []*file_control.MyFile
+	Files []*fileManager.MyFile
 	Source string
 }
 
-func (m HighMessage) Serialize() string {
+// convert the message into a string
+func (m HighMessage) Serialize() []byte {
 	b, _ := json.Marshal(m)
-	return string(b)
+	return b
 }
 
-func Deserialize(b string) HighMessage {
+func Deserialize(b []byte) HighMessage {
 	var msg HighMessage
-	json.Unmarshal([]byte(b), &msg)
+	json.Unmarshal(b, &msg)
 	return msg
 }
 
+// main contains all the loops
 func main() {
 	fmt.Println("Hello!")
 
 	// read configuration
-	err_read := config.Read_config()
-	if err_read != nil {
-		log.Fatal(err_read)
+	errRead := config.ReadConfig()
+	if errRead != nil {
+		log.Fatal(errRead)
 	}
 
 	// client
-	ch_c := make(chan messaging.Response)
-	c, err_c := messaging.NewClient(ch_c)
-	if err_c != nil {
-		log.Fatal(err_c)
+	chC := make(chan messaging.Response)
+	c, errC := messaging.NewClient(chC)
+	if errC != nil {
+		log.Fatal(errC)
 	}
 	go c.ListenUnicast()
 
-	// ping
-	ping := HighMessage{PING, nil, config.Config.Name}
-	msg := messaging.CreateMessage(0, ping.Serialize())
-	c.SendMulticast(msg)
-
 	// server
-	ch_s := make(chan messaging.Response)
-	s, err_s := messaging.NewServer(ch_s)
-	if err_s != nil {
-		log.Fatal(err_s)
+	chS := make(chan messaging.Response)
+	s, errS := messaging.NewServer(chS)
+	if errS != nil {
+		log.Fatal(errS)
 	}
 	go s.Listen()
 
-	// stdin IO
-	io_struct := ui.NewIO()
-	go io_struct.StdinListen()
+	// ping to let everyone know that we are here
+	ping := HighMessage{PING, nil, config.Config.Name}
+	msg := messaging.CreateMessage(ping.Serialize())
+	c.SendMulticast(msg)
 
-	fc := file_control.File_controller{}
+	// stdin IO
+	ioStruct := ui.NewIO()
+	go ioStruct.StdinListen()
+
+	// file controller
+	fc := fileManager.FileController{}
 	fc.Init()
 
 	// host cache
-	hc := hostcache.New_hostcache()
+	hc := hostcache.NewHostcache()
 
-	kill_server := make(chan bool)
+	killServer := make(chan bool)
+
+	// raw server loop
 	go func() {
 		for {
 			select {
-				case server_msg := <-s.Recv_ch: {
-					high_msg := Deserialize(server_msg.Msg.Value)
-					switch high_msg.Cmd {
+				case serverMsg := <-s.RecvCh: {
+					highMsg := Deserialize(serverMsg.Msg.Value)
+					switch highMsg.Cmd {
 						case LIST: {
-							response := HighMessage{LIST_REPLY, fc.List_local_files(), config.Config.Name}
-							msg := messaging.CreateMessage(0, response.Serialize())
-							s.SendUnicast(server_msg.From, msg)
+							response := HighMessage{LIST_REPLY, fc.ListLocalFiles(), config.Config.Name}
+							msg := messaging.CreateMessage(response.Serialize())
+							s.SendUnicast(serverMsg.From, msg)
 						}
 						case PING: {
-							// update ARP cache
-							high_msg := Deserialize(server_msg.Msg.Value)
-							hc.Put(high_msg.Source, server_msg.From)
+							// update host-name cache
+							highMsg := Deserialize(serverMsg.Msg.Value)
+							hc.Put(highMsg.Source, serverMsg.From)
 
 							// respond with a PING_REPLY so that the pinger can update his cache
 							response := HighMessage{PING_REPLY, nil, config.Config.Name}
-							msg := messaging.CreateMessage(0, response.Serialize())
-							s.SendUnicast(server_msg.From, msg)
+							msg := messaging.CreateMessage(response.Serialize())
+							s.SendUnicast(serverMsg.From, msg)
 						}
 					}
 				}
-				case <-kill_server: {
+				case <-killServer: {
 					return
 				}
 			}
 		}
 	}()
 
-	kill_client := make(chan bool)
-	io_chan := make(chan HighMessage)
+	killClient := make(chan bool)
+	ioChan := make(chan HighMessage)
+	ioExpected := util.NewAtomicFlag()
 
-	io_expected := util.New_atomicflag()
-
+	// raw client loop (simply deserializes the higher level messages and sends them to the logic client loop
+	// or drops them if the logic loop wasn't expecting anything
 	go func() {
 		for {
 			select {
-				case client_msg := <-c.Recv_ch: {
-					high_msg := Deserialize(client_msg.Msg.Value)
+				case clientMsg := <-c.RecvCh: {
+					highMsg := Deserialize(clientMsg.Msg.Value)
 
-					switch high_msg.Cmd {
+					switch highMsg.Cmd {
 						case LIST_REPLY: {
-							if io_expected.Get() {
-								io_chan <- high_msg
+							if ioExpected.True() {
+								ioChan <- highMsg
 							}
 						}
 						case PING_REPLY: {
-							hc.Put(high_msg.Source, client_msg.From)
+							hc.Put(highMsg.Source, clientMsg.From)
 						}
 					}
 				}
-				case <-kill_client: {
+				case <-killClient: {
 					return
 				}
 			}
@@ -139,33 +147,36 @@ func main() {
 	}()
 
 
-	/* client loop */
+	// logic client loop
+	// switch case based on the type of command received as input
 	for {
-		inp := <-io_struct.IO_chan
+		inp := <-ioStruct.IOChan
 		switch inp.Op {
 			case ui.LIST_CMD: {
 				m := HighMessage{LIST, nil, config.Config.Name}
-				c.SendMulticast(messaging.CreateMessage(0, m.Serialize()))
+				c.SendMulticast(messaging.CreateMessage(m.Serialize()))
 				timer := time.NewTimer(time.Second * WAIT_DURATION)
 				replies := []HighMessage{}
-				reply_wait := true
+				replyWait := true
 
-				io_expected.Set(true)
+				ioExpected.Set(true)
 
+				// multicast out a list files request and wait at most WAIT_DURATION for replies
+				// TODO the results of this should probably be cached to avoid flooding the network every time
 				for {
 					select {
-						case high_msg := <-io_chan: {
-							if high_msg.Cmd == LIST_REPLY {
-								replies = append(replies, high_msg)
+						case highMsg := <-ioChan: {
+							if highMsg.Cmd == LIST_REPLY {
+								replies = append(replies, highMsg)
 							}
 						}
 						case <-timer.C: {
-							reply_wait = false
-							io_expected.Set(false)
+							replyWait = false
+							ioExpected.Set(false)
 							break
 						}
 					}
-					if !reply_wait {
+					if !replyWait {
 						break
 					}
 				}
@@ -176,55 +187,57 @@ func main() {
 			case ui.GET_CMD: {
 			}
 			case ui.LIST_LOCAL_CMD: {
-				l := fc.List_local_files()
+				l := fc.ListLocalFiles()
 				for _, f := range l {
 					fmt.Println(f)
 				}
 			}
 			case ui.LIST_USERS_CMD: {
-				users := hc.Get_cache()
+				users := hc.Cache()
 				for k, v := range users {
 					fmt.Println(k, v)
 				}
 			}
 		}
 
-		io_struct.IO_cmd_complete <- true
+		ioStruct.IOCmdComplete <- true
 	}
 }
 
-func Merge(fc file_control.File_controller, replies []HighMessage) ui.Stdout_table {
+// Merge merges the lists of files obtained from the machines on the LAN that replied
+// (since multiple machines may have the same files (or portions of them)
+func Merge(fc fileManager.FileController, replies []HighMessage) ui.StdoutTable {
 	// merge
-	m := make(map[string][]*file_control.MyFile)
+	m := make(map[string][]*fileManager.MyFile)
 	users := make(map[string][]string)
 	for _, r := range replies {
 		for _, f := range r.Files {
-			m[f.Full_hash] = append(m[f.Full_hash], f)
-			users[f.Full_hash] = append(users[f.Full_hash], r.Source)
+			m[f.FullHash] = append(m[f.FullHash], f)
+			users[f.FullHash] = append(users[f.FullHash], r.Source)
 		}
 	}
 
-	table := ui.Stdout_table{}
+	table := ui.StdoutTable{}
 
 	for k, v := range m {
-		r := ui.Stdout_record{}
-		r.Full_hash = k
-		merged_hash_bit_vector := &file_control.Bit_vector{}
-		var representative_file *file_control.MyFile
+		r := ui.StdoutRecord{}
+		r.FullHash = k
+		mergedHashBitVector := &fileManager.BitVector{}
+		var representativeFile *fileManager.MyFile
 		for _, f := range v {
 			r.Names = append(r.Names, f.Name)
-			merged_hash_bit_vector.Bit_vector_or(f.Hash_bit_vector)
-			representative_file = f
+			mergedHashBitVector.BitVectorOr(f.HashBitVector)
+			representativeFile = f
 		}
-		r.Percent_complete = merged_hash_bit_vector.Percent_set(representative_file.Get_num_blocks())
-		local_copy := fc.Get_file_from_hash(k)
-		if local_copy == nil {
-			r.Percent_local = 0
-			r.Max_complete = r.Percent_complete
+		r.PercentComplete = mergedHashBitVector.PercentSet(representativeFile.NumBlocks())
+		localCopy := fc.FileFromHash(k)
+		if localCopy == nil {
+			r.PercentLocal = 0
+			r.MaxComplete = r.PercentComplete
 		} else {
-			r.Percent_local = local_copy.Percent_complete()
-			merged_hash_bit_vector.Bit_vector_or(local_copy.Hash_bit_vector)
-			r.Max_complete = merged_hash_bit_vector.Percent_set(representative_file.Get_num_blocks())
+			r.PercentLocal = localCopy.PercentComplete()
+			mergedHashBitVector.BitVectorOr(localCopy.HashBitVector)
+			r.MaxComplete = mergedHashBitVector.PercentSet(representativeFile.NumBlocks())
 		}
 		r.Users = users[k]
 		table.Records = append(table.Records, r)

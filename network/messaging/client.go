@@ -7,9 +7,9 @@ import (
 )
 
 type Client struct {
-	ipv4_unicast_conn  *net.UDPConn
+	ipv4UnicastConn  *net.UDPConn
 
-	Recv_ch chan Response	// send from client to app
+	RecvCh chan Response	// send from client to app
 }
 
 func NewClient(comm chan Response) (*Client, error) {
@@ -20,10 +20,11 @@ func NewClient(comm chan Response) (*Client, error) {
 	}
 
 	c := &Client {
-		ipv4_unicast_conn: uconn4,
-		Recv_ch: make(chan Response),
+		ipv4UnicastConn: uconn4,
+		RecvCh: make(chan Response),
 	}
 
+	// TODO change to try any available interface which has an IP address assigned to it by a DHCP server
 	vbox, err := net.InterfaceByName("vboxnet0")
 	c.SetInterface(vbox)
 
@@ -33,7 +34,7 @@ func NewClient(comm chan Response) (*Client, error) {
 // used to set the hardware interface
 func (c *Client) SetInterface(iface *net.Interface) error {
 	// need this to allow packets to be sent to the multicast group
-	p := ipv4.NewPacketConn(c.ipv4_unicast_conn)
+	p := ipv4.NewPacketConn(c.ipv4UnicastConn)
 	err := p.SetMulticastInterface(iface)
 	if err != nil {
 		return err
@@ -43,18 +44,24 @@ func (c *Client) SetInterface(iface *net.Interface) error {
 
 // multicast a query out
 func (c *Client) SendMulticast(m Message) {
-	byteStream := ToJson(m)
-	c.ipv4_unicast_conn.WriteToUDP(byteStream, ipv4_addr)
+	byteStream := Serialize(m)
+	c.ipv4UnicastConn.WriteToUDP(byteStream, ipv4Addr)
+}
+
+// unicast a query out
+func (c *Client) SendUnicast(m Message, addr *net.UDPAddr) {
+	byteStream := Serialize(m)
+	c.ipv4UnicastConn.WriteToUDP(byteStream, addr)
 }
 
 func (c *Client) ListenUnicast() {
 	buf := make([]byte, 65536)
 	for {
-		n, from, err := c.ipv4_unicast_conn.ReadFrom(buf)
+		n, from, err := c.ipv4UnicastConn.ReadFrom(buf)
 		if err != nil {
-			fmt.Printf("[ERR] mdns: Failed to read packet: %v", err)
+			fmt.Printf("[ERR] client: Failed to read packet: %v", err)
 			continue
 		}
-		c.Recv_ch <- Response{FromJson(buf[:n]), from}
+		c.RecvCh <- Response{Deserialize(buf[:n]), from}
 	}
 }

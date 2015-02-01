@@ -5,14 +5,8 @@ import (
 	"net"
 )
 
-const (
-	QUERY = iota
-	FETCH
-)
-
 type Message struct {
-	Type int
-	Value string
+	Value []byte
 }
 
 type Response struct {
@@ -20,23 +14,18 @@ type Response struct {
 	From net.Addr
 }
 
-func ToJson(m Message) []byte {
+func Serialize(m Message) []byte {
 	b, _ := json.Marshal(m)
 	return b
 }
 
-func FromJson(b []byte) Message {
+func Deserialize(b []byte) Message {
 	var msg Message
 	json.Unmarshal(b, &msg)
 	return msg
 }
 
-func CreateQueryMessage(query string) Message {
-	m := Message{QUERY, query}
-	return m
-}
-
-func CreateMessage(typ int, val string) Message {
-	m := Message{typ, val}
+func CreateMessage(val []byte) Message {
+	m := Message{val}
 	return m
 }

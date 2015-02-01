@@ -2,27 +2,31 @@ package ui
 
 import "fmt"
 
-type Stdout_record struct {
-	Names []string				// names of the file given by user
-	Full_hash string			// full hash
-	Percent_complete int		// percent available (merged across all users)
-	Percent_local int			// percent I already have
-	Max_complete int			// maximum percentage of file I can have if I fetch it
-	Users []string				// the users who contribute chunks
+// StdoutRecord stores the information that will be displayed to the user
+type StdoutRecord struct {
+	Names []string			// names of the file given by user
+	FullHash string			// full hash
+	PercentComplete int		// percent available (merged across all users)
+	PercentLocal int		// percent I already have
+	MaxComplete int			// maximum percentage of file I can have if I fetch it
+	Users []string			// the users who contribute chunks
 }
 
-type Stdout_table struct {
-	Records []Stdout_record
+// StdoutTable is a list of StdoutRecords
+type StdoutTable struct {
+	Records []StdoutRecord
 }
 
-func New_table() *Stdout_table {
-	t := Stdout_table{}
+// NewTable creates a new StdoutTable
+func NewTable() *StdoutTable {
+	t := StdoutTable{}
 	return &t
 }
 
-func (table *Stdout_table) Display() {
+// Display prints out the contents of StdoutTable onto stdout
+func (table *StdoutTable) Display() {
 	fmt.Println("Names\t%c/l/m\tUsers\tFull hash\n")
 	for _, r := range table.Records {
-		fmt.Printf("%v\t%d/%d/%d\t%v\t%s\n", r.Names, r.Percent_complete, r.Percent_local, r.Max_complete, r.Users, r.Full_hash)
+		fmt.Printf("%v\t%d/%d/%d\t%v\t%s\n", r.Names, r.PercentComplete, r.PercentLocal, r.MaxComplete, r.Users, r.FullHash)
 	}
 }
