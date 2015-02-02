@@ -2,7 +2,7 @@ package fileManager
 
 import (
 	"os"
-	"yank/managers/config"
+	"yank/config"
 	"gopkg.in/fsnotify.v1"
 	"log"
 	"fmt"

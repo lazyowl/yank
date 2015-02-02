@@ -1,5 +1,5 @@
 // Package hostcache contains logic for a caching mechanism for storing names -> IP address pairs
-package hostcache
+package cache
 
 import (
 	"net"

@@ -92,7 +92,6 @@ func main() {
 							// update host-name cache
 							highMsg := Deserialize(peerMsg.Msg.Value)
 							hc.Put(highMsg.Source, peerMsg.From)
-							fmt.Println("received ping!", peerMsg.From)
 
 							// respond with a PING_REPLY so that the pinger can update his cache
 							response := HighMessage{PING_REPLY, nil, config.Config.Name}
@@ -106,7 +105,6 @@ func main() {
 						}
 						case PING_REPLY: {
 							hc.Put(highMsg.Source, peerMsg.From)
-							fmt.Println("received ping reply!", peerMsg.From)
 						}
 					}
 				}
