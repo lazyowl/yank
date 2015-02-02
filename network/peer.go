@@ -1,4 +1,4 @@
-package messaging
+package network
 
 import (
 	"net"
@@ -6,36 +6,37 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-type Client struct {
-	ipv4UnicastConn  *net.UDPConn
-
-	RecvCh chan Response	// send from client to app
+type Peer struct {
+	ipv4UnicastConn *net.UDPConn
+	ipv4Listener *net.UDPConn
+	RecvCh chan Response
 }
 
-func NewClient(comm chan Response) (*Client, error) {
-	// create a unicast ipv4 listener (listening on all available interfaces 0.0.0.0)
+func NewPeer() (*Peer, error) {
 	uconn4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if uconn4 == nil {
 		return nil, err
 	}
-
-	c := &Client {
+	ipv4Listener, err := net.ListenMulticastUDP("udp4", nil, ipv4Addr)
+	if ipv4Listener == nil {
+		return nil, err
+	}
+	p := &Peer {
 		ipv4UnicastConn: uconn4,
+		ipv4Listener: ipv4Listener,
 		RecvCh: make(chan Response),
 	}
 
-	// TODO change to try any available interface which has an IP address assigned to it by a DHCP server
 	vbox, err := net.InterfaceByName("vboxnet0")
-	c.SetInterface(vbox)
-
-	return c, nil
+	p.SetInterface(vbox)
+	return p, nil
 }
 
 // used to set the hardware interface
-func (c *Client) SetInterface(iface *net.Interface) error {
+func (p *Peer) SetInterface(iface *net.Interface) error {
 	// need this to allow packets to be sent to the multicast group
-	p := ipv4.NewPacketConn(c.ipv4UnicastConn)
-	err := p.SetMulticastInterface(iface)
+	pconn := ipv4.NewPacketConn(p.ipv4UnicastConn)
+	err := pconn.SetMulticastInterface(iface)
 	if err != nil {
 		return err
 	}
@@ -43,18 +44,19 @@ func (c *Client) SetInterface(iface *net.Interface) error {
 }
 
 // multicast a query out
-func (c *Client) SendMulticast(m Message) {
+func (c *Peer) SendMulticast(m Message) {
 	byteStream := Serialize(m)
 	c.ipv4UnicastConn.WriteToUDP(byteStream, ipv4Addr)
 }
 
 // unicast a query out
-func (c *Client) SendUnicast(m Message, addr *net.UDPAddr) {
+func (c *Peer) SendUnicast(m Message, to net.Addr) {
+	addr := to.(*net.UDPAddr)
 	byteStream := Serialize(m)
 	c.ipv4UnicastConn.WriteToUDP(byteStream, addr)
 }
 
-func (c *Client) ListenUnicast() {
+func (c *Peer) ListenUnicast() {
 	buf := make([]byte, 65536)
 	for {
 		n, from, err := c.ipv4UnicastConn.ReadFrom(buf)
@@ -63,5 +65,16 @@ func (c *Client) ListenUnicast() {
 			continue
 		}
 		c.RecvCh <- Response{Deserialize(buf[:n]), from}
+	}
+}
+
+func (s *Peer) ListenMulticast() {
+	buf := make([]byte, 65536)
+	for {
+		n, from, err := s.ipv4Listener.ReadFrom(buf)
+		if err != nil {
+			continue
+		}
+		s.RecvCh <- Response{Deserialize(buf[:n]), from}
 	}
 }

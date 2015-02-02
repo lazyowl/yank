@@ -3,10 +3,10 @@ package main
 
 import (
 	"fmt"
-	"yank/network/messaging"
-	"yank/managers/config"
-	"yank/managers/fileManager"
-	"yank/managers/hostcache"
+	"yank/network"
+	"yank/config"
+	"yank/fileManager"
+	"yank/cache"
 	"yank/util"
 	"yank/ui"
 	"encoding/json"
@@ -20,7 +20,7 @@ const (
 	LIST = 0
 	LIST_REPLY = 1
 	PING = 2
-	PING_REPLY
+	PING_REPLY = 3
 )
 
 type HighMessage struct {
@@ -51,26 +51,15 @@ func main() {
 		log.Fatal(errRead)
 	}
 
-	// client
-	chC := make(chan messaging.Response)
-	c, errC := messaging.NewClient(chC)
-	if errC != nil {
-		log.Fatal(errC)
-	}
-	go c.ListenUnicast()
-
-	// server
-	chS := make(chan messaging.Response)
-	s, errS := messaging.NewServer(chS)
-	if errS != nil {
-		log.Fatal(errS)
-	}
-	go s.Listen()
+	// peer
+	peer, _ := network.NewPeer()
+	go peer.ListenUnicast()
+	go peer.ListenMulticast()
 
 	// ping to let everyone know that we are here
 	ping := HighMessage{PING, nil, config.Config.Name}
-	msg := messaging.CreateMessage(ping.Serialize())
-	c.SendMulticast(msg)
+	msg := network.CreateMessage(ping.Serialize())
+	peer.SendMulticast(msg)
 
 	// stdin IO
 	ioStruct := ui.NewIO()
@@ -81,65 +70,47 @@ func main() {
 	fc.Init()
 
 	// host cache
-	hc := hostcache.NewHostcache()
+	hc := cache.NewHostcache()
 
-	killServer := make(chan bool)
-
-	// raw server loop
-	go func() {
-		for {
-			select {
-				case serverMsg := <-s.RecvCh: {
-					highMsg := Deserialize(serverMsg.Msg.Value)
-					switch highMsg.Cmd {
-						case LIST: {
-							response := HighMessage{LIST_REPLY, fc.ListLocalFiles(), config.Config.Name}
-							msg := messaging.CreateMessage(response.Serialize())
-							s.SendUnicast(serverMsg.From, msg)
-						}
-						case PING: {
-							// update host-name cache
-							highMsg := Deserialize(serverMsg.Msg.Value)
-							hc.Put(highMsg.Source, serverMsg.From)
-
-							// respond with a PING_REPLY so that the pinger can update his cache
-							response := HighMessage{PING_REPLY, nil, config.Config.Name}
-							msg := messaging.CreateMessage(response.Serialize())
-							s.SendUnicast(serverMsg.From, msg)
-						}
-					}
-				}
-				case <-killServer: {
-					return
-				}
-			}
-		}
-	}()
-
-	killClient := make(chan bool)
+	killPeer := make(chan bool)
 	ioChan := make(chan HighMessage)
 	ioExpected := util.NewAtomicFlag()
 
-	// raw client loop (simply deserializes the higher level messages and sends them to the logic client loop
-	// or drops them if the logic loop wasn't expecting anything
+	// raw peer loop
 	go func() {
 		for {
 			select {
-				case clientMsg := <-c.RecvCh: {
-					highMsg := Deserialize(clientMsg.Msg.Value)
-
+				case peerMsg := <-peer.RecvCh: {
+					highMsg := Deserialize(peerMsg.Msg.Value)
 					switch highMsg.Cmd {
+						case LIST: {
+							response := HighMessage{LIST_REPLY, fc.ListLocalFiles(), config.Config.Name}
+							msg := network.CreateMessage(response.Serialize())
+							peer.SendUnicast(msg, peerMsg.From)
+						}
+						case PING: {
+							// update host-name cache
+							highMsg := Deserialize(peerMsg.Msg.Value)
+							hc.Put(highMsg.Source, peerMsg.From)
+							fmt.Println("received ping!", peerMsg.From)
+
+							// respond with a PING_REPLY so that the pinger can update his cache
+							response := HighMessage{PING_REPLY, nil, config.Config.Name}
+							msg := network.CreateMessage(response.Serialize())
+							peer.SendUnicast(msg, peerMsg.From)
+						}
 						case LIST_REPLY: {
 							if ioExpected.True() {
 								ioChan <- highMsg
 							}
 						}
 						case PING_REPLY: {
-							hc.Put(highMsg.Source, clientMsg.From)
+							hc.Put(highMsg.Source, peerMsg.From)
+							fmt.Println("received ping reply!", peerMsg.From)
 						}
 					}
 				}
-				case <-killClient: {
+				case <-killPeer: {
 					return
 				}
 			}
@@ -153,16 +124,14 @@ func main() {
 		inp := <-ioStruct.IOChan
 		switch inp.Op {
 			case ui.LIST_CMD: {
+				ioExpected.Set(true)
+
 				m := HighMessage{LIST, nil, config.Config.Name}
-				c.SendMulticast(messaging.CreateMessage(m.Serialize()))
+				peer.SendMulticast(network.CreateMessage(m.Serialize()))
+
 				timer := time.NewTimer(time.Second * WAIT_DURATION)
 				replies := []HighMessage{}
 				replyWait := true
-
-				ioExpected.Set(true)
-
-				// multicast out a list files request and wait at most WAIT_DURATION for replies
-				// TODO the results of this should probably be cached to avoid flooding the network every time
 				for {
 					select {
 						case highMsg := <-ioChan: {
