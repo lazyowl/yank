@@ -16,7 +16,8 @@ type FileController struct {
 }
 
 // Init initializes the file controller and sets up the watcher
-func (fc FileController) Init() chan bool {
+func NewFileController() FileController {
+	fc := FileController{}
 	var err error
 	fc.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
@@ -49,7 +50,7 @@ func (fc FileController) Init() chan bool {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return done
+	return fc
 }
 
 // getMyFileFromName returns a MyFile pointer from the filename

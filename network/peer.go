@@ -3,12 +3,23 @@ package network
 import (
 	"net"
 	"fmt"
+	"sync"
 	"golang.org/x/net/ipv4"
+)
+
+const (
+	ipv4Mdns = "224.0.0.251"
+	mdnsPort = 5353
+)
+
+var (
+	ipv4Addr = &net.UDPAddr{IP: net.ParseIP(ipv4Mdns), Port: mdnsPort}
 )
 
 type Peer struct {
 	ipv4UnicastConn *net.UDPConn
 	ipv4Listener *net.UDPConn
+	sendLock *sync.Mutex
 	RecvCh chan Response
 }
 
@@ -24,6 +35,7 @@ func NewPeer() (*Peer, error) {
 	p := &Peer {
 		ipv4UnicastConn: uconn4,
 		ipv4Listener: ipv4Listener,
+		sendLock: &sync.Mutex{},
 		RecvCh: make(chan Response),
 	}
 
@@ -46,6 +58,8 @@ func (p *Peer) SetInterface(iface *net.Interface) error {
 // multicast a query out
 func (c *Peer) SendMulticast(m Message) {
 	byteStream := Serialize(m)
+	c.sendLock.Lock()
+	defer c.sendLock.Unlock()
 	c.ipv4UnicastConn.WriteToUDP(byteStream, ipv4Addr)
 }
 
@@ -53,6 +67,8 @@ func (c *Peer) SendMulticast(m Message) {
 func (c *Peer) SendUnicast(m Message, to net.Addr) {
 	addr := to.(*net.UDPAddr)
 	byteStream := Serialize(m)
+	c.sendLock.Lock()
+	defer c.sendLock.Unlock()
 	c.ipv4UnicastConn.WriteToUDP(byteStream, addr)
 }
 

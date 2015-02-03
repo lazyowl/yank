@@ -2,25 +2,29 @@
 package main
 
 import (
-	"fmt"
-	"yank/network"
 	"yank/config"
+	"yank/network"
 	"yank/fileManager"
 	"yank/cache"
-	"yank/util"
 	"yank/ui"
 	"encoding/json"
-	"log"
-	"time"
+	"fmt"
+	"strings"
+	"bufio"
+	"os"
 )
 
 const (
 	WAIT_DURATION = 2
-
 	LIST = 0
 	LIST_REPLY = 1
-	PING = 2
-	PING_REPLY = 3
+)
+
+var (
+	peer, _ = network.NewPeer()
+	fileController = fileManager.NewFileController()
+	hostCache = cache.NewHostcache()
+	fileListCache = cache.NewFileListCache()
 )
 
 type HighMessage struct {
@@ -41,75 +45,35 @@ func Deserialize(b []byte) HighMessage {
 	return msg
 }
 
+// ping to let everyone know that we are here and what we have
+func ping(name string) {
+	m := HighMessage{LIST, nil, config.Config.Name}
+	peer.SendMulticast(network.CreateMessage(m.Serialize()))
+}
+
 // main contains all the loops
 func main() {
-	fmt.Println("Hello!")
-
-	// read configuration
-	errRead := config.ReadConfig()
-	if errRead != nil {
-		log.Fatal(errRead)
-	}
-
-	// peer
-	peer, _ := network.NewPeer()
+	// setup listeners
 	go peer.ListenUnicast()
 	go peer.ListenMulticast()
 
-	// ping to let everyone know that we are here
-	ping := HighMessage{PING, nil, config.Config.Name}
-	msg := network.CreateMessage(ping.Serialize())
-	peer.SendMulticast(msg)
-
-	// stdin IO
-	ioStruct := ui.NewIO()
-	go ioStruct.StdinListen()
-
-	// file controller
-	fc := fileManager.FileController{}
-	fc.Init()
-
-	// host cache
-	hc := cache.NewHostcache()
-
-	killPeer := make(chan bool)
-	ioChan := make(chan HighMessage)
-	ioExpected := util.NewAtomicFlag()
+	// ping (ideally needs to repeat)
+	ping(config.Config.Name)
 
 	// raw peer loop
 	go func() {
 		for {
-			select {
-				case peerMsg := <-peer.RecvCh: {
-					highMsg := Deserialize(peerMsg.Msg.Value)
-					switch highMsg.Cmd {
-						case LIST: {
-							response := HighMessage{LIST_REPLY, fc.ListLocalFiles(), config.Config.Name}
-							msg := network.CreateMessage(response.Serialize())
-							peer.SendUnicast(msg, peerMsg.From)
-						}
-						case PING: {
-							// update host-name cache
-							highMsg := Deserialize(peerMsg.Msg.Value)
-							hc.Put(highMsg.Source, peerMsg.From)
-
-							// respond with a PING_REPLY so that the pinger can update his cache
-							response := HighMessage{PING_REPLY, nil, config.Config.Name}
-							msg := network.CreateMessage(response.Serialize())
-							peer.SendUnicast(msg, peerMsg.From)
-						}
-						case LIST_REPLY: {
-							if ioExpected.True() {
-								ioChan <- highMsg
-							}
-						}
-						case PING_REPLY: {
-							hc.Put(highMsg.Source, peerMsg.From)
-						}
-					}
+			peerMsg := <-peer.RecvCh
+			highMsg := Deserialize(peerMsg.Msg.Value)
+			hostCache.Put(highMsg.Source, peerMsg.From)
+			switch highMsg.Cmd {
+				case LIST: {
+					response := HighMessage{LIST_REPLY, fileController.ListLocalFiles(), config.Config.Name}
+					msg := network.CreateMessage(response.Serialize())
+					peer.SendUnicast(msg, peerMsg.From)
 				}
-				case <-killPeer: {
-					return
+				case LIST_REPLY: {
+					// add files to fileListCache
 				}
 			}
 		}
@@ -119,95 +83,35 @@ func main() {
 	// logic client loop
 	// switch case based on the type of command received as input
 	for {
-		inp := <-ioStruct.IOChan
-		switch inp.Op {
-			case ui.LIST_CMD: {
-				ioExpected.Set(true)
-
-				m := HighMessage{LIST, nil, config.Config.Name}
-				peer.SendMulticast(network.CreateMessage(m.Serialize()))
-
-				timer := time.NewTimer(time.Second * WAIT_DURATION)
-				replies := []HighMessage{}
-				replyWait := true
-				for {
-					select {
-						case highMsg := <-ioChan: {
-							if highMsg.Cmd == LIST_REPLY {
-								replies = append(replies, highMsg)
-							}
-						}
-						case <-timer.C: {
-							replyWait = false
-							ioExpected.Set(false)
-							break
-						}
-					}
-					if !replyWait {
-						break
-					}
+		fmt.Printf("$ ")
+		bio := bufio.NewReader(os.Stdin)
+		line, _, _:= bio.ReadLine()
+		toks := strings.Split(string(line), " ")
+		switch toks[0] {
+			case "ls": {
+				// hit the cache
+			}
+			case "get": {
+				if len(toks) > 1 {
+					fmt.Println(toks[1])
 				}
-
-				table := Merge(fc, replies)
-				table.Display()
 			}
-			case ui.GET_CMD: {
-			}
-			case ui.LIST_LOCAL_CMD: {
-				l := fc.ListLocalFiles()
-				for _, f := range l {
+			case "lls": {
+				for _, f := range fileController.ListLocalFiles() {
 					fmt.Println(f)
 				}
 			}
-			case ui.LIST_USERS_CMD: {
-				users := hc.Cache()
-				for k, v := range users {
+			case "lu": {
+				for k, v := range hostCache.Cache() {
 					fmt.Println(k, v)
 				}
 			}
-		}
-
-		ioStruct.IOCmdComplete <- true
-	}
-}
-
-// Merge merges the lists of files obtained from the machines on the LAN that replied
-// (since multiple machines may have the same files (or portions of them)
-func Merge(fc fileManager.FileController, replies []HighMessage) ui.StdoutTable {
-	// merge
-	m := make(map[string][]*fileManager.MyFile)
-	users := make(map[string][]string)
-	for _, r := range replies {
-		for _, f := range r.Files {
-			m[f.FullHash] = append(m[f.FullHash], f)
-			users[f.FullHash] = append(users[f.FullHash], r.Source)
+			case "q": {
+				return
+			}
+			default: {
+				fmt.Println("Invalid command!")
+			}
 		}
 	}
-
-	table := ui.StdoutTable{}
-
-	for k, v := range m {
-		r := ui.StdoutRecord{}
-		r.FullHash = k
-		mergedHashBitVector := &fileManager.BitVector{}
-		var representativeFile *fileManager.MyFile
-		for _, f := range v {
-			r.Names = append(r.Names, f.Name)
-			mergedHashBitVector.BitVectorOr(f.HashBitVector)
-			representativeFile = f
-		}
-		r.PercentComplete = mergedHashBitVector.PercentSet(representativeFile.NumBlocks())
-		localCopy := fc.FileFromHash(k)
-		if localCopy == nil {
-			r.PercentLocal = 0
-			r.MaxComplete = r.PercentComplete
-		} else {
-			r.PercentLocal = localCopy.PercentComplete()
-			mergedHashBitVector.BitVectorOr(localCopy.HashBitVector)
-			r.MaxComplete = mergedHashBitVector.PercentSet(representativeFile.NumBlocks())
-		}
-		r.Users = users[k]
-		table.Records = append(table.Records, r)
-	}
-	return table
 }

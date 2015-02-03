@@ -1,6 +1,10 @@
 package ui
 
-import "fmt"
+import (
+	"fmt"
+	"net"
+	"yank/fileManager"
+)
 
 // StdoutRecord stores the information that will be displayed to the user
 type StdoutRecord struct {

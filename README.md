@@ -1,6 +1,9 @@
 #Yank
 Yank is a peer to peer file sharing system for LANs written in Go.
 
+######News Flash
+There's been some rather chaotic initial development as I grapple with various designs and golang best practices. I am slowly converging upon a stable design to build on though.
+
 ####Mostly Complete:
 
 * Basic networking capability - each machine runs a small server subscribed to a multicast network.
