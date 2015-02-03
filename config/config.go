@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"log"
 )
 
 const CONFIG_FILE_PATH = "./config.txt"
@@ -16,20 +17,22 @@ type Configuration struct {
 	MetaDir string
 }
 
-// ReadConfig reads the configuration file and exposes a Configuration object for others to use
-func ReadConfig() error {
+// reads the configuration file and exposes a Configuration object for others to use
+func init() {
 	abspath, _ := filepath.Abs(CONFIG_FILE_PATH)
 	file, fileErr := os.Open(abspath)
 	if fileErr != nil {
-		return fileErr
+		log.Fatal(fileErr)
 	}
 	decoder := json.NewDecoder(file)
 	Config = Configuration{}
 	err := decoder.Decode(&Config)
 	if err != nil {
-		return err
+		log.Fatal(fileErr)
 	}
 	Config.PublicDir, _ = filepath.Abs(Config.PublicDir)
 	Config.MetaDir, _ = filepath.Abs(Config.MetaDir)
-	return nil
+
+	os.Mkdir(Config.PublicDir, 0666)
+	os.Mkdir(Config.MetaDir, 0666)
 }
