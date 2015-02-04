@@ -11,10 +11,11 @@ import (
 	"strings"
 	"bufio"
 	"os"
+	"time"
 )
 
 const (
-	WAIT_DURATION = 2
+	PING_INTERVAL = 10		// multicast every PING_INTERVAL seconds
 	LIST = 0
 	LIST_REPLY = 1
 )
@@ -24,7 +25,7 @@ var (
 	peer, _ = network.NewPeer()
 	fileController = fileManager.NewFileController()
 	hostCache = cache.NewHostcache()
-	fileListCache = cache.NewFileListCache()
+	fileListCache = cache.NewUserFileCache()
 )
 
 type HighMessage struct {
@@ -59,46 +60,40 @@ func main() {
 
 	// ping (ideally needs to repeat)
 	ping(config.Config.Name)
+	pingTicker := time.NewTicker(time.Second * PING_INTERVAL)
 
 	// raw peer loop
 	go func() {
 		for {
-			peerMsg := <-peer.RecvCh
-			highMsg := Deserialize(peerMsg.Msg.Value)
-			hostCache.Put(highMsg.Source, peerMsg.From)
-			switch highMsg.Cmd {
-				case LIST: {
-					response := HighMessage{LIST_REPLY, fileController.ListLocalFiles(), config.Config.Name}
-					msg := network.CreateMessage(response.Serialize())
-					peer.SendUnicast(msg, peerMsg.From)
-				}
-				case LIST_REPLY: {
-					// add files to fileListCache
-					files := highMsg.Files
-					for _, f := range files {
-						fileListCache.PutName(f.FullHash, f.Name, highMsg.Source)
-						i := uint(0)
-						(&f.HashBitVector).ResetIterator()
-						for i < uint(f.NumBlocks()) {
-							found, err := (&f.HashBitVector).Next()
-							fmt.Println("found:", found)
-							if err != nil {
-								break
+			select {
+				case peerMsg := <-peer.RecvCh: {
+					highMsg := Deserialize(peerMsg.Msg.Value)
+					hostCache.Put(highMsg.Source, peerMsg.From)
+					switch highMsg.Cmd {
+						case LIST: {
+							response := HighMessage{LIST_REPLY, fileController.ListLocalFiles(), config.Config.Name}
+							msg := network.CreateMessage(response.Serialize())
+							peer.SendUnicast(msg, peerMsg.From)
+						}
+						case LIST_REPLY: {
+							// possible TODO: maybe just send the deltas each time?
+							fileListCache.ClearUser(highMsg.Source)
+							for _, f := range highMsg.Files {
+								fileListCache.Put(highMsg.Source, f)
 							}
-							if found {
-								fileListCache.PutChunk(f.FullHash, i, highMsg.Source)
-							}
-							i++
 						}
 					}
+				}
+				case <-pingTicker.C: {
+					ping(config.Config.Name)
 				}
 			}
 		}
 	}()
 
-
 	// logic client loop
 	// switch case based on the type of command received as input
+	// this is possibly temporary
 	for {
 		fmt.Printf("$ ")
 		bio := bufio.NewReader(os.Stdin)
@@ -113,6 +108,8 @@ func main() {
 			case "get": {
 				if len(toks) > 1 {
 					fmt.Println(toks[1])
+				} else {
+					fmt.Println("get what?")
 				}
 			}
 			case "lls": {
