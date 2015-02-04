@@ -33,6 +33,6 @@ func init() {
 	Config.PublicDir, _ = filepath.Abs(Config.PublicDir)
 	Config.MetaDir, _ = filepath.Abs(Config.MetaDir)
 
-	os.Mkdir(Config.PublicDir, 0666)
-	os.Mkdir(Config.MetaDir, 0666)
+	os.Mkdir(Config.PublicDir, 0777)
+	os.Mkdir(Config.MetaDir, 0777)
 }

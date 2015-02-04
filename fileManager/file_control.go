@@ -112,17 +112,17 @@ func (fc FileController) DestroyFile(name string) bool {
 }
 
 // ListLocalFiles returns a list of MyFile pointers corresponding to files present in local Public dir
-func (fc FileController) ListLocalFiles() []*MyFile {
+func (fc FileController) ListLocalFiles() []MyFile {
 	dir, err := os.Open(config.Config.PublicDir)
 	if err != nil {
 		log.Fatal(err)
 	}
 	names, _ := dir.Readdirnames(0)
-	files := []*MyFile{}
+	files := []MyFile{}
 	for _, k := range names {
 		f, err := fc.getMyFileFromName(k)
 		if err == nil {
-			files = append(files, f)
+			files = append(files, *f)
 		}
 	}
 	return files
@@ -133,7 +133,7 @@ func (fc FileController) FileFromHash(hash string) *MyFile {
 	files := fc.ListLocalFiles()
 	for _, f := range files {
 		if f.FullHash == hash {
-			return f
+			return &f
 		}
 	}
 	return nil

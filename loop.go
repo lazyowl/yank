@@ -6,7 +6,6 @@ import (
 	"yank/network"
 	"yank/fileManager"
 	"yank/cache"
-	"yank/ui"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -20,6 +19,7 @@ const (
 	LIST_REPLY = 1
 )
 
+// ignoring errors for now
 var (
 	peer, _ = network.NewPeer()
 	fileController = fileManager.NewFileController()
@@ -29,7 +29,7 @@ var (
 
 type HighMessage struct {
 	Cmd int
-	Files []*fileManager.MyFile
+	Files []fileManager.MyFile
 	Source string
 }
 
@@ -47,7 +47,7 @@ func Deserialize(b []byte) HighMessage {
 
 // ping to let everyone know that we are here and what we have
 func ping(name string) {
-	m := HighMessage{LIST, nil, config.Config.Name}
+	m := HighMessage{LIST_REPLY, fileController.ListLocalFiles(), config.Config.Name}
 	peer.SendMulticast(network.CreateMessage(m.Serialize()))
 }
 
@@ -74,6 +74,23 @@ func main() {
 				}
 				case LIST_REPLY: {
 					// add files to fileListCache
+					files := highMsg.Files
+					for _, f := range files {
+						fileListCache.PutName(f.FullHash, f.Name, highMsg.Source)
+						i := uint(0)
+						(&f.HashBitVector).ResetIterator()
+						for i < uint(f.NumBlocks()) {
+							found, err := (&f.HashBitVector).Next()
+							fmt.Println("found:", found)
+							if err != nil {
+								break
+							}
+							if found {
+								fileListCache.PutChunk(f.FullHash, i, highMsg.Source)
+							}
+							i++
+						}
+					}
 				}
 			}
 		}
@@ -90,6 +107,8 @@ func main() {
 		switch toks[0] {
 			case "ls": {
 				// hit the cache
+				cachedList := fileListCache.GetAll()
+				fmt.Println(cachedList)
 			}
 			case "get": {
 				if len(toks) > 1 {
