@@ -82,7 +82,7 @@ func (fc FileController) generateMyFileEntry(filename string) (*MyFile, error) {
 	fullHash := Hash(b)
 
 	// bit vector has all ones since we have the file
-	file := MyFile{filepath.Base(filename), fullHash, BitVectorOnes(), len(b)}
+	file := MyFile{filepath.Base(filename), fullHash, BitVectorOnes(), len(b), nil}
 	fmt.Println("FILENAME IS ", file.Name, file.Size, file.HashBitVector)
 
 	err = fc.writeMyFile(&file)
@@ -137,4 +137,22 @@ func (fc FileController) FileFromHash(hash string) *MyFile {
 		}
 	}
 	return nil
+}
+
+func (fc FileController) CreateEmptyFile(name string, hash string, size int) (*MyFile, error) {
+	file, err := os.Create(filepath.Join(config.Config.PublicDir, name))
+	if err != nil {
+		return nil, err
+	}
+	truncErr := file.Truncate(int64(size))
+	if truncErr != nil {
+		return nil, truncErr
+	}
+	f, err := fc.generateMyFileEntry(filepath.Join(config.Config.PublicDir, name))
+	if err != nil {
+		return nil, err
+	}
+	f.HashBitVector = BitVectorZero()	// change to an all zeros bit vector
+	file.Close()
+	return f, nil
 }

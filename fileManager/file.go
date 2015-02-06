@@ -3,6 +3,9 @@ package fileManager
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"yank/config"
 )
 
 
@@ -14,6 +17,8 @@ type MyFile struct {
 	FullHash string				// hash of entire file
 	HashBitVector BitVector		// bit vector describing how many of these are present on the current machine
 	Size int					// size
+
+	fileHandle *os.File
 }
 
 // String returns a string representation
@@ -48,4 +53,27 @@ func (f *MyFile) NumBlocks() int {
 // PercentComplete returns the percentage of the file that is available
 func (f *MyFile) PercentComplete() int {
 	return f.HashBitVector.PercentSet(f.NumBlocks())
+}
+
+// WriteChunk writes chunk. It assumes file exists and has a valid size
+func (f *MyFile) WriteChunk(chunkPos int, data []byte) error {
+	_, seekErr := f.fileHandle.Seek(int64(chunkPos * CHUNK_SIZE), 0)
+	if seekErr != nil {
+		return seekErr
+	}
+	_, writeErr := f.fileHandle.Write(data)
+	if writeErr != nil {
+		return writeErr
+	}
+	return nil
+}
+
+func (f *MyFile) Open() error {
+	var err error
+	f.fileHandle, err = os.Open(filepath.Join(config.Config.PublicDir, f.Name))
+	return err
+}
+
+func (f *MyFile) Close() {
+	f.fileHandle.Close()
 }
