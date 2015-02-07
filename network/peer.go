@@ -52,24 +52,27 @@ func (p *Peer) SetInterface(iface *net.Interface) error {
 	if err != nil {
 		return err
 	}
+	pconn1 := ipv4.NewPacketConn(p.ipv4Listener)
+	err1 := pconn1.SetMulticastInterface(iface)
+	if err1 != nil {
+		return err1
+	}
 	return nil
 }
 
 // multicast a query out
 func (c *Peer) SendMulticast(m Message) {
-	byteStream := Serialize(m)
 	c.sendLock.Lock()
 	defer c.sendLock.Unlock()
-	c.ipv4UnicastConn.WriteToUDP(byteStream, ipv4Addr)
+	c.ipv4UnicastConn.WriteToUDP(m, ipv4Addr)
 }
 
 // unicast a query out
 func (c *Peer) SendUnicast(m Message, to net.Addr) {
 	addr := to.(*net.UDPAddr)
-	byteStream := Serialize(m)
 	c.sendLock.Lock()
 	defer c.sendLock.Unlock()
-	c.ipv4UnicastConn.WriteToUDP(byteStream, addr)
+	c.ipv4UnicastConn.WriteToUDP(m, addr)
 }
 
 func (c *Peer) ListenUnicast() {
@@ -80,7 +83,7 @@ func (c *Peer) ListenUnicast() {
 			fmt.Printf("[ERR] client: Failed to read packet: %v", err)
 			continue
 		}
-		c.RecvCh <- Response{Deserialize(buf[:n]), from}
+		c.RecvCh <- Response{buf[:n], from}
 	}
 }
 
@@ -91,6 +94,6 @@ func (s *Peer) ListenMulticast() {
 		if err != nil {
 			continue
 		}
-		s.RecvCh <- Response{Deserialize(buf[:n]), from}
+		s.RecvCh <- Response{buf[:n], from}
 	}
 }

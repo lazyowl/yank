@@ -1,31 +1,55 @@
 package network
 
 import (
-	"encoding/json"
 	"net"
+	"yank/fileManager"
+	"encoding/json"
 )
 
-type Message struct {
-	Value []byte
-}
+/* Lower level message */
+type Message []byte
 
 type Response struct {
 	Msg Message
 	From net.Addr
 }
 
-func Serialize(m Message) []byte {
+
+/* Higher level message */
+type DataTuple struct {
+	Position int
+	Data []byte
+}
+
+func NewDataTuple(pos int, dat []byte) DataTuple {
+	return DataTuple{pos, dat}
+}
+
+type CmdMessage struct {
+	// control messaging
+	Cmd int
+	Files []fileManager.MyFile
+	Source string
+
+	// data messaging
+	Hash string
+	RequestedChunkNumbers []int
+	ReturnedDataChunks []DataTuple
+	Size int
+}
+
+func (m CmdMessage) Serialize() []byte {
 	b, _ := json.Marshal(m)
 	return b
 }
 
-func Deserialize(b []byte) Message {
-	var msg Message
+func Deserialize(b []byte) CmdMessage {
+	var msg CmdMessage
 	json.Unmarshal(b, &msg)
 	return msg
 }
 
-func CreateMessage(val []byte) Message {
-	m := Message{val}
-	return m
+func NewCmdMessage() CmdMessage {
+	cmdMsg := CmdMessage{}
+	return cmdMsg
 }

@@ -68,9 +68,20 @@ func (f *MyFile) WriteChunk(chunkPos int, data []byte) error {
 	return nil
 }
 
+func (f *MyFile) ReadChunk(chunkPos int) ([]byte, error) {
+	_, seekErr := f.fileHandle.Seek(int64(chunkPos * CHUNK_SIZE), 0)
+	b := make([]byte, CHUNK_SIZE)
+	if seekErr != nil {
+		return []byte{}, seekErr
+	}
+	_, readErr := f.fileHandle.Read(b)
+	return b, readErr
+}
+
+// Open opens file for writing
 func (f *MyFile) Open() error {
 	var err error
-	f.fileHandle, err = os.Open(filepath.Join(config.Config.PublicDir, f.Name))
+	f.fileHandle, err = os.OpenFile(filepath.Join(config.Config.PublicDir, f.Name), os.O_RDWR, 0x664)
 	return err
 }
 
