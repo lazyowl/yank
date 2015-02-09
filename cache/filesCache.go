@@ -1,18 +1,25 @@
 package cache
 
-import "yank/fileManager"
+import (
+	"yank/fileManager"
+	"sync"
+)
 
 type UserFileCache struct {
 	cache map[string]map[string]fileManager.MyFile	// user -> (hash -> list of myfiles)
+	lock *sync.Mutex
 }
 
 func NewUserFileCache() *UserFileCache {
 	uf := UserFileCache{}
 	uf.cache = make(map[string]map[string]fileManager.MyFile)
+	uf.lock = &sync.Mutex{}
 	return &uf
 }
 
 func (uf *UserFileCache) Put(user string, f fileManager.MyFile) {
+	uf.lock.Lock()
+	defer uf.lock.Unlock()
 	_, found := uf.cache[user]
 	if !found {
 		uf.cache[user] = make(map[string]fileManager.MyFile)
@@ -25,6 +32,8 @@ func (uf *UserFileCache) GetAll() map[string]map[string]fileManager.MyFile {
 }
 
 func (uf *UserFileCache) ClearUser(user string) {
+	uf.lock.Lock()
+	defer uf.lock.Unlock()
 	_, found := uf.cache[user]
 	if found {
 		delete(uf.cache, user)

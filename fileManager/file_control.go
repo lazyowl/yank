@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"sync"
 )
 
 // Type FileController provides functions for interacting with the Public and Meta dirs
@@ -16,7 +17,7 @@ type FileController struct {
 }
 
 // Init initializes the file controller and sets up the watcher
-func NewFileController() FileController {
+func NewFileController() *FileController {
 	fc := FileController{}
 	var err error
 	fc.watcher, err = fsnotify.NewWatcher()
@@ -50,7 +51,7 @@ func NewFileController() FileController {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return fc
+	return &fc
 }
 
 // getMyFileFromName returns a MyFile pointer from the filename
@@ -61,18 +62,20 @@ func (fc FileController) getMyFileFromName(name string) (*MyFile, error) {
 		fmt.Println("err!", err)
 		return nil, err
 	}
-	return Deserialize(fileContents), nil
+	f := Deserialize(fileContents)
+	f.lock = &sync.Mutex{}
+	return f, nil
 }
 
 // writeMyFile writes the MyFile into the Meta directory
-func (fc FileController) writeMyFile(f *MyFile) error {
+func (fc *FileController) writeMyFile(f *MyFile) error {
 	fmt.Println("writing to file:", f.Name)
 	return ioutil.WriteFile(filepath.Join(config.Config.MetaDir, f.Name), f.Serialize(), 0666)
 }
 
 
 // generateMyFileEntry assumes the entire file is present locally (to be used when locally creating a new public file)
-func (fc FileController) generateMyFileEntry(filename string) (*MyFile, error) {
+func (fc *FileController) generateMyFileEntry(filename string) (*MyFile, error) {
 	fmt.Println("GenerateMyFileEntry:", filename)
 	b, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -82,20 +85,24 @@ func (fc FileController) generateMyFileEntry(filename string) (*MyFile, error) {
 	fullHash := Hash(b)
 
 	// bit vector has all ones since we have the file
-	file := MyFile{filepath.Base(filename), fullHash, BitVectorOnes(), len(b), nil}
+	file := NewMyFile()
+	file.Name = filepath.Base(filename)
+	file.FullHash = fullHash
+	file.HashBitVector = BitVectorOnes()
+	file.Size = len(b)
 	fmt.Println("FILENAME IS ", file.Name, file.Size, file.HashBitVector)
 
-	err = fc.writeMyFile(&file)
+	err = fc.writeMyFile(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return &file, nil
+	return file, nil
 }
 
 
 // DestroyFile destroys the file
-func (fc FileController) DestroyFile(name string) bool {
+func (fc *FileController) DestroyFile(name string) bool {
 	fileContents, err := ioutil.ReadFile(name)
 	if err != nil {
 		// this might happen when a file is simply created but not written to
@@ -112,7 +119,7 @@ func (fc FileController) DestroyFile(name string) bool {
 }
 
 // ListLocalFiles returns a list of MyFile pointers corresponding to files present in local Public dir
-func (fc FileController) ListLocalFiles() []MyFile {
+func (fc *FileController) ListLocalFiles() []MyFile {
 	dir, err := os.Open(config.Config.PublicDir)
 	if err != nil {
 		log.Fatal(err)
@@ -129,7 +136,7 @@ func (fc FileController) ListLocalFiles() []MyFile {
 }
 
 // FileFromHash returns MyFile pointer from a full hash (TODO improve this)
-func (fc FileController) FileFromHash(hash string) *MyFile {
+func (fc *FileController) FileFromHash(hash string) *MyFile {
 	files := fc.ListLocalFiles()
 	for _, f := range files {
 		if f.FullHash == hash {
@@ -139,7 +146,7 @@ func (fc FileController) FileFromHash(hash string) *MyFile {
 	return nil
 }
 
-func (fc FileController) CreateEmptyFile(name string, hash string, size int) (*MyFile, error) {
+func (fc *FileController) CreateEmptyFile(name string, hash string, size int) (*MyFile, error) {
 	file, err := os.Create(filepath.Join(config.Config.PublicDir, name))
 	if err != nil {
 		return nil, err

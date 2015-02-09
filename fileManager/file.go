@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"yank/config"
+	"sync"
 )
 
 
@@ -19,6 +20,13 @@ type MyFile struct {
 	Size int					// size
 
 	fileHandle *os.File
+	lock *sync.Mutex
+}
+
+func NewMyFile() *MyFile {
+	f := MyFile{}
+	f.lock = &sync.Mutex{}
+	return &f
 }
 
 // String returns a string representation
@@ -57,6 +65,8 @@ func (f *MyFile) PercentComplete() int {
 
 // WriteChunk writes chunk. It assumes file exists and has a valid size
 func (f *MyFile) WriteChunk(chunkPos int, data []byte) error {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	_, seekErr := f.fileHandle.Seek(int64(chunkPos * CHUNK_SIZE), 0)
 	if seekErr != nil {
 		return seekErr
@@ -69,6 +79,8 @@ func (f *MyFile) WriteChunk(chunkPos int, data []byte) error {
 }
 
 func (f *MyFile) ReadChunk(chunkPos int) ([]byte, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	_, seekErr := f.fileHandle.Seek(int64(chunkPos * CHUNK_SIZE), 0)
 	b := make([]byte, CHUNK_SIZE)
 	if seekErr != nil {
