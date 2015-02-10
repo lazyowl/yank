@@ -24,14 +24,20 @@ type Peer struct {
 }
 
 func NewPeer() (*Peer, error) {
+	vbox, err := net.InterfaceByName("vboxnet0")
+
 	uconn4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if uconn4 == nil {
 		return nil, err
 	}
-	ipv4Listener, err := net.ListenMulticastUDP("udp4", nil, ipv4Addr)
+	pconn := ipv4.NewPacketConn(uconn4)
+	pconn.SetMulticastInterface(vbox)
+
+	ipv4Listener, err := net.ListenMulticastUDP("udp4", vbox, ipv4Addr)
 	if ipv4Listener == nil {
 		return nil, err
 	}
+
 	p := &Peer {
 		ipv4UnicastConn: uconn4,
 		ipv4Listener: ipv4Listener,
@@ -39,25 +45,7 @@ func NewPeer() (*Peer, error) {
 		RecvCh: make(chan Response),
 	}
 
-	vbox, err := net.InterfaceByName("vboxnet0")
-	p.SetInterface(vbox)
 	return p, nil
-}
-
-// used to set the hardware interface
-func (p *Peer) SetInterface(iface *net.Interface) error {
-	// need this to allow packets to be sent to the multicast group
-	pconn := ipv4.NewPacketConn(p.ipv4UnicastConn)
-	err := pconn.SetMulticastInterface(iface)
-	if err != nil {
-		return err
-	}
-	pconn1 := ipv4.NewPacketConn(p.ipv4Listener)
-	err1 := pconn1.SetMulticastInterface(iface)
-	if err1 != nil {
-		return err1
-	}
-	return nil
 }
 
 // multicast a query out
