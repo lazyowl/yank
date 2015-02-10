@@ -1,7 +1,5 @@
 package fileManager
 
-import "errors"
-
 // Type BitVector provides an interface to a bit vector
 type BitVector struct {
 	BitVec uint64
@@ -43,21 +41,6 @@ func (b BitVector) PercentSet(n int) int {
 		return -1
 	}
 	return 100 * count / n
-}
-
-// Next returns whether the next bit is set or not (from lsb to msb)
-func (b *BitVector) Next() (bool, error) {
-	if b.iter > 64 {
-		return false, errors.New("stop iteration")
-	}
-	tmp := uint64(0x01)
-	tmp <<= b.iter
-	b.iter++
-	return (tmp & b.BitVec) > 0, nil
-}
-
-func (b *BitVector) ResetIterator() {
-	b.iter = 0
 }
 
 // BitVectorOnes returns bit vector with all bits set
