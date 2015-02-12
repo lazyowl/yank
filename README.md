@@ -9,11 +9,12 @@ There's been some rather chaotic initial development as I grapple with various d
 * Basic networking capability - each machine runs a small server subscribed to a multicast network.
 * Basic custom configuration
 * Inotify watcher in place watching the directory specified in the config file
-* Basic yank prompt allows users to see available public files and users on the LAN (as well as some stats)
+* Basic yank prompt allows users to see available public files and users on the LAN (as well as some stats), though its not very pretty
+* File transfer - extremely simplistic, fixed size chunks
 
 ####To do:
 
-* The actual file transfer module - thinking of constant size chunks and fetch the ones the user doesn't have. May possibly look into something like Rabin-Karp hashing
+* Show download stats when file download is complete and allow subsequent files to be downloaded
 * Add a file index. Right now yank performs a readdir to get to the file in question based on one of its attributes
 
 ####Run:
