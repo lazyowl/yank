@@ -30,11 +30,15 @@ func NewFileController() *FileController {
 			select {
 				case event := <-fc.watcher.Events: {
 					log.Println(event)
+					basename := filepath.Base(event.Name)
+					if event.Op&fsnotify.Create == fsnotify.Create {
+						fc.generateMyFileEntry(basename)
+					}
 					if event.Op&fsnotify.Write == fsnotify.Write {
-						fc.generateMyFileEntry(event.Name)
+						fc.updateMyFileEntry(basename)
 					}
 					if event.Op&fsnotify.Remove == fsnotify.Remove {
-						fc.DestroyFile(event.Name)
+						fc.DestroyFile(basename)
 					}
 				}
 				case err := <-fc.watcher.Errors: {
@@ -55,7 +59,7 @@ func NewFileController() *FileController {
 }
 
 // getMyFileFromName returns a MyFile pointer from the filename
-func (fc FileController) getMyFileFromName(name string) (*MyFile, error) {
+func (fc *FileController) getMyFileFromName(name string) (*MyFile, error) {
 	fileContents, err := ioutil.ReadFile(filepath.Join(config.Config.MetaDir, name))
 	if err != nil {
 		// this might happen when a file is simply created but not written to
@@ -77,7 +81,7 @@ func (fc *FileController) writeMyFile(f *MyFile) error {
 // generateMyFileEntry assumes the entire file is present locally (to be used when locally creating a new public file)
 func (fc *FileController) generateMyFileEntry(filename string) (*MyFile, error) {
 	fmt.Println("GenerateMyFileEntry:", filename)
-	b, err := ioutil.ReadFile(filename)
+	b, err := ioutil.ReadFile(filepath.Join(config.Config.PublicDir, filename))
 	if err != nil {
 		fmt.Println("readfile")
 		log.Fatal(err)
@@ -98,6 +102,19 @@ func (fc *FileController) generateMyFileEntry(filename string) (*MyFile, error) 
 	}
 
 	return file, nil
+}
+
+func (fc *FileController) updateMyFileEntry(filename string) {
+	f, _ := fc.getMyFileFromName(filename)
+	b, err := ioutil.ReadFile(filepath.Join(config.Config.PublicDir, filename))
+	if err != nil {
+		fmt.Println("readfile")
+		log.Fatal(err)
+	}
+	fullHash := Hash(b)
+	f.FullHash = fullHash
+	f.Size = len(b)
+	fc.writeMyFile(f)
 }
 
 
@@ -155,7 +172,7 @@ func (fc *FileController) CreateEmptyFile(name string, hash string, size int) (*
 	if truncErr != nil {
 		return nil, truncErr
 	}
-	f, err := fc.generateMyFileEntry(filepath.Join(config.Config.PublicDir, name))
+	f, err := fc.generateMyFileEntry(name)
 	if err != nil {
 		return nil, err
 	}
