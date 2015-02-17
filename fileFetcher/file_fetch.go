@@ -5,15 +5,14 @@ import (
 	"yank/fileManager"
 	"yank/config"
 	"yank/cache"
-	"yank/constants"
 	"fmt"
 	"time"
 )
 
 const (
-	UNREQUESTED = 0
-	REQUEST_SENT = 1
-	REQUEST_COMPLETE = 2
+	UNREQUESTED = iota
+	REQUEST_SENT
+	REQUEST_COMPLETE
 )
 
 var fileController *fileManager.FileController
@@ -65,7 +64,7 @@ func NewFileFetcher(fc *fileManager.FileController, p *network.Peer, hc *cache.H
 // return value of 0 indicates nothing more can be done
 func StartSendingRound() {
 	for k, v := range potentialUserMap {
-		if numOutstandingRequests > constants.MAX_FILE_REQUESTS {
+		if numOutstandingRequests > config.Config.MaxFileRequests {
 			break
 		}
 		chunks := []int{}
@@ -85,11 +84,11 @@ func StartSendingRound() {
 		}
 
 		userFetchMap[k] = chunks
-		userTimeout[k] = constants.REQUEST_TTL
+		userTimeout[k] = config.Config.RequestTTL
 
 		m := network.NewCmdMessage()
 		m.Source = config.Config.Name
-		m.Cmd = constants.FILE_REQUEST
+		m.Cmd = network.FILE_REQUEST
 		m.Hash = currentFileRequestHash
 		m.RequestedChunkNumbers = chunks
 		peer.SendUnicast(m.Serialize(), hostCache.Get(k))
@@ -193,7 +192,7 @@ func (ff *FileFetcher) ManageFileFetch() {
 				f.Close()
 
 				response := network.NewCmdMessage()
-				response.Cmd = constants.FILE_RESPONSE
+				response.Cmd = network.FILE_RESPONSE
 				response.Source = config.Config.Name
 				response.Hash = hash
 				response.ReturnedDataChunks = data

@@ -2,7 +2,6 @@
 package main
 
 import (
-	"yank/constants"
 	"yank/config"
 	"yank/cache"
 	"yank/network"
@@ -17,6 +16,8 @@ import (
 	"flag"
 )
 
+const DEFAULT_CONFIG_PATH = "./config.txt"
+
 var (
 	peer *network.Peer
 	fileController *fileManager.FileController
@@ -27,10 +28,20 @@ var (
 
 func init() {
 	var err error
+
 	ifaceStr := flag.String("iface", "eth0", "LAN interface")
-	configStr := flag.String("config", constants.DEFAULT_CONFIG_PATH, "configuration file")
+	configPathStr := flag.String("config", DEFAULT_CONFIG_PATH, "configuration file")
+	nameStr := flag.String("name", "", "public name on the network")
+
+	// these values cannot be <= 0, if they are <= 0, that means they weren't provided or the user entered bad values
+	pingIntervalInt := flag.Int("ping", 0, "ping interval")
+	maxRequestsInt := flag.Int("maxreq", 0, "max file requests")
+	requestTTLInt := flag.Int("ttl", 0, "request TTL")
+
 	flag.Parse();
-	config.ReadConfig(*configStr)
+
+	config.ReadConfig(*configPathStr, *nameStr, *pingIntervalInt, *maxRequestsInt, *requestTTLInt)
+
 	peer, err = network.NewPeer(*ifaceStr)
 	if err != nil {
 		log.Fatal(err)
@@ -45,7 +56,7 @@ func init() {
 // ping to let everyone know that we are here and what we have
 func ping(name string) {
 	m := network.NewCmdMessage()
-	m.Cmd = constants.LIST_REPLY
+	m.Cmd = network.LIST_REPLY
 	m.Files = fileController.ListLocalFiles()
 	m.Source = config.Config.Name
 	peer.SendMulticast(m.Serialize())
@@ -61,7 +72,7 @@ func main() {
 
 	// ping (ideally needs to repeat)
 	ping(config.Config.Name)
-	pingTicker := time.NewTicker(time.Second * constants.PING_INTERVAL)
+	pingTicker := time.NewTicker(time.Second * time.Duration(config.Config.PingInterval))
 
 	// raw peer loop
 	go func() {
@@ -76,24 +87,24 @@ func main() {
 					}
 					hostCache.Put(cmdMsg.Source, peerMsg.From)
 					switch cmdMsg.Cmd {
-						case constants.LIST: {
+						case network.LIST: {
 							response := network.NewCmdMessage()
-							response.Cmd = constants.LIST_REPLY
+							response.Cmd = network.LIST_REPLY
 							response.Files = fileController.ListLocalFiles()
 							response.Source = config.Config.Name
 							peer.SendUnicast(response.Serialize(), peerMsg.From)
 						}
-						case constants.LIST_REPLY: {
+						case network.LIST_REPLY: {
 							// possible TODO: maybe just send the deltas each time?
 							fileListCache.ClearUser(cmdMsg.Source)
 							for _, f := range cmdMsg.Files {
 								fileListCache.Put(cmdMsg.Source, f)
 							}
 						}
-						case constants.FILE_REQUEST: {
+						case network.FILE_REQUEST: {
 							fileFetchManager.ServerQ <- cmdMsg
 						}
-						case constants.FILE_RESPONSE: {
+						case network.FILE_RESPONSE: {
 							fileFetchManager.ResponseQ <- cmdMsg
 						}
 					}
@@ -112,7 +123,10 @@ func main() {
 	for {
 		fmt.Printf("$ ")
 		bio := bufio.NewReader(os.Stdin)
-		line, _, _:= bio.ReadLine()
+		line, _, err:= bio.ReadLine()
+		if err != nil {
+			break
+		}
 		toks := strings.Split(string(line), " ")
 		switch toks[0] {
 			case "ls": {
