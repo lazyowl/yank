@@ -12,4 +12,6 @@ const (
 	MAX_FILE_REQUESTS = 20	// maximum outstanding requests
 
 	REQUEST_TTL = 5
+
+	DEFAULT_CONFIG_PATH = "./config.txt"
 )

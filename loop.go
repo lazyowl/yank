@@ -14,6 +14,7 @@ import (
 	"os"
 	"time"
 	"log"
+	"flag"
 )
 
 var (
@@ -26,7 +27,11 @@ var (
 
 func init() {
 	var err error
-	peer, err = network.NewPeer()
+	ifaceStr := flag.String("iface", "eth0", "LAN interface")
+	configStr := flag.String("config", constants.DEFAULT_CONFIG_PATH, "configuration file")
+	flag.Parse();
+	config.ReadConfig(*configStr)
+	peer, err = network.NewPeer(*ifaceStr)
 	if err != nil {
 		log.Fatal(err)
 	}

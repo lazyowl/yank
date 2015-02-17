@@ -7,8 +7,6 @@ import (
 	"log"
 )
 
-const CONFIG_FILE_PATH = "./config.txt"
-
 var Config Configuration
 
 type Configuration struct {
@@ -18,8 +16,8 @@ type Configuration struct {
 }
 
 // reads the configuration file and exposes a Configuration object for others to use
-func init() {
-	abspath, _ := filepath.Abs(CONFIG_FILE_PATH)
+func ReadConfig(path string) {
+	abspath, _ := filepath.Abs(path)
 	file, fileErr := os.Open(abspath)
 	if fileErr != nil {
 		log.Fatal(fileErr)
