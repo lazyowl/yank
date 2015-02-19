@@ -27,13 +27,18 @@ var potentialUserMap map[string]fileManager.MyFile
 var timer *time.Ticker
 var numOutstandingRequests int
 var localFile *fileManager.MyFile
+var fileSaveName string
 var currentFileRequestHash string
 
 var downloadInProgress bool
 
+type FileToFetch struct {
+	Hash string
+	Name string
+}
 
 type FileFetcher struct {
-	ClientQ chan string		// queue of file requests made by client
+	ClientQ chan FileToFetch		// queue of file requests made by client
 	ResponseQ chan network.CmdMessage	// queue of file request responses by other peers
 	ServerQ chan network.CmdMessage	// queue of file requests made by other peers on the network
 	DownloadComplete chan bool		// notifies app that download is complete
@@ -42,7 +47,7 @@ type FileFetcher struct {
 func NewFileFetcher(fc *fileManager.FileController, p *network.Peer, hc *cache.HostCache, fcache *cache.UserFileCache) *FileFetcher {
 	ff := FileFetcher{}
 	// TODO probably make these buffered
-	ff.ClientQ = make(chan string)
+	ff.ClientQ = make(chan FileToFetch)
 	ff.ResponseQ = make(chan network.CmdMessage)
 	ff.ServerQ = make(chan network.CmdMessage)
 	ff.DownloadComplete = make(chan bool)
@@ -150,7 +155,7 @@ func (ff *FileFetcher) ManageFileFetch() {
 				numOutstandingRequests--
 				if localFile == nil {
 					// create file (for now, with the hash as the name), ideally, this would be specified by the user TODO
-					localFile, _ = fileController.CreateEmptyFile(currentFileRequestHash, currentFileRequestHash, fileResponse.Size)
+					localFile, _ = fileController.CreateEmptyFile(fileSaveName, currentFileRequestHash, fileResponse.Size)
 				}
 				localFile.Open()
 				for _, tuple := range fileResponse.ReturnedDataChunks {
@@ -171,8 +176,14 @@ func (ff *FileFetcher) ManageFileFetch() {
 					}
 				}
 			}
-			case fileRequestHash := <-ff.ClientQ: {
+			case fileToFetch := <-ff.ClientQ: {
 				// potentialUserMap = map of user -> file
+				fileRequestHash := fileToFetch.Hash
+				if fileToFetch.Name != "" {
+					fileSaveName = fileToFetch.Name
+				} else {
+					fileSaveName = fileRequestHash
+				}
 				currentFileRequestHash = fileRequestHash
 				potentialUserMap = fileListCache.GetExistingByHash(fileRequestHash)
 				if len(potentialUserMap) == 0 {

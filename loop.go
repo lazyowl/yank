@@ -140,8 +140,11 @@ func main() {
 				}
 			}
 			case "get": {
-				if len(toks) > 1 {
-					fileFetchManager.ClientQ <- toks[1]
+				if len(toks) == 2 {
+					fileFetchManager.ClientQ <- fileFetcher.FileToFetch{toks[1], ""}
+					<-fileFetchManager.DownloadComplete
+				} else if len(toks) == 3 {
+					fileFetchManager.ClientQ <- fileFetcher.FileToFetch{toks[1], toks[2]}
 					<-fileFetchManager.DownloadComplete
 				} else {
 					fmt.Println("get what?")
