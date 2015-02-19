@@ -11,10 +11,10 @@ There's been some rather chaotic initial development as I grapple with various d
 * Inotify watcher in place watching the directory specified in the config file
 * Basic yank prompt allows users to see available public files and users on the LAN (as well as some stats), though its not very pretty
 * File transfer - extremely simplistic, fixed size chunks
+* Kind of shows download stats when file download is complete; also new files can be downloaded too
 
 ####To do:
 
-* Show download stats when file download is complete and allow subsequent files to be downloaded
 * Add a file index. Right now yank performs a readdir to get to the file in question based on one of its attributes
 
 ####Run:

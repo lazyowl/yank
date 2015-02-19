@@ -36,6 +36,7 @@ type FileFetcher struct {
 	ClientQ chan string		// queue of file requests made by client
 	ResponseQ chan network.CmdMessage	// queue of file request responses by other peers
 	ServerQ chan network.CmdMessage	// queue of file requests made by other peers on the network
+	DownloadComplete chan bool		// notifies app that download is complete
 }
 
 func NewFileFetcher(fc *fileManager.FileController, p *network.Peer, hc *cache.HostCache, fcache *cache.UserFileCache) *FileFetcher {
@@ -44,6 +45,7 @@ func NewFileFetcher(fc *fileManager.FileController, p *network.Peer, hc *cache.H
 	ff.ClientQ = make(chan string)
 	ff.ResponseQ = make(chan network.CmdMessage)
 	ff.ServerQ = make(chan network.CmdMessage)
+	ff.DownloadComplete = make(chan bool)
 
 	positionMap = make(map[int]int)
 	userFetchMap = make(map[string][]int)
@@ -60,8 +62,9 @@ func NewFileFetcher(fc *fileManager.FileController, p *network.Peer, hc *cache.H
 	return &ff
 }
 
-// starts sending round and returns the number of requests that were sent
-// return value of 0 indicates nothing more can be done
+// starts sending round
+// IMPORTANT: if after the sending round, the number of outstanding requests is zero,
+// I say that the download is complete
 func StartSendingRound() {
 	for k, v := range potentialUserMap {
 		if numOutstandingRequests > config.Config.MaxFileRequests {
@@ -92,6 +95,7 @@ func StartSendingRound() {
 		m.Hash = currentFileRequestHash
 		m.RequestedChunkNumbers = chunks
 		peer.SendUnicast(m.Serialize(), hostCache.Get(k))
+
 		numOutstandingRequests++
 	}
 }
@@ -120,8 +124,12 @@ func (ff *FileFetcher) ManageFileFetch() {
 						}
 					}
 				}
-				if somethingTimedOut {
+				if somethingTimedOut && downloadInProgress {
 					StartSendingRound()
+					if numOutstandingRequests == 0 {
+						downloadInProgress = false
+						ff.onComplete()
+					}
 				}
 			}
 			case fileResponse := <-ff.ResponseQ: {
@@ -155,7 +163,13 @@ func (ff *FileFetcher) ManageFileFetch() {
 					localFile.HashBitVector.SetBit(uint(tuple.Position))
 				}
 				localFile.Close()
-				StartSendingRound()
+				if downloadInProgress {
+					StartSendingRound()
+					if numOutstandingRequests == 0 {
+						downloadInProgress = false
+						ff.onComplete()
+					}
+				}
 			}
 			case fileRequestHash := <-ff.ClientQ: {
 				// potentialUserMap = map of user -> file
@@ -170,7 +184,13 @@ func (ff *FileFetcher) ManageFileFetch() {
 				// download has begun
 				downloadInProgress = true
 
-				StartSendingRound()
+				if downloadInProgress {
+					StartSendingRound()
+					if numOutstandingRequests == 0 {
+						downloadInProgress = false
+						ff.onComplete()
+					}
+				}
 			}
 			case cmdMsg := <-ff.ServerQ: {
 				hash := cmdMsg.Hash
@@ -201,4 +221,10 @@ func (ff *FileFetcher) ManageFileFetch() {
 			}
 		}
 	}
+}
+
+func (ff *FileFetcher) onComplete() {
+	fmt.Println("==== Download Complete ===")
+	fmt.Printf("Name:%s\nHash:%s\nPercent Complete:%d%%\nTrue Size:%d\n", localFile.Name, localFile.FullHash, localFile.PercentComplete(), localFile.Size)
+	ff.DownloadComplete <- true
 }

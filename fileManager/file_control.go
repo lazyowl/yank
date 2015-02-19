@@ -29,7 +29,7 @@ func NewFileController() *FileController {
 		for {
 			select {
 				case event := <-fc.watcher.Events: {
-					log.Println(event)
+					//log.Println(event)
 					basename := filepath.Base(event.Name)
 					if event.Op&fsnotify.Create == fsnotify.Create {
 						fc.generateMyFileEntry(basename)
@@ -73,14 +73,12 @@ func (fc *FileController) getMyFileFromName(name string) (*MyFile, error) {
 
 // writeMyFile writes the MyFile into the Meta directory
 func (fc *FileController) writeMyFile(f *MyFile) error {
-	fmt.Println("writing to file:", f.Name)
 	return ioutil.WriteFile(filepath.Join(config.Config.MetaDir, f.Name), f.Serialize(), 0666)
 }
 
 
 // generateMyFileEntry assumes the entire file is present locally (to be used when locally creating a new public file)
 func (fc *FileController) generateMyFileEntry(filename string) (*MyFile, error) {
-	fmt.Println("GenerateMyFileEntry:", filename)
 	b, err := ioutil.ReadFile(filepath.Join(config.Config.PublicDir, filename))
 	if err != nil {
 		fmt.Println("readfile")
@@ -94,7 +92,6 @@ func (fc *FileController) generateMyFileEntry(filename string) (*MyFile, error) 
 	file.FullHash = fullHash
 	file.HashBitVector = BitVectorOnes()
 	file.Size = len(b)
-	fmt.Println("FILENAME IS ", file.Name, file.Size, file.HashBitVector)
 
 	err = fc.writeMyFile(file)
 	if err != nil {

@@ -80,7 +80,7 @@ func main() {
 			select {
 				case peerMsg := <-peer.RecvCh: {
 					cmdMsg := network.Deserialize(peerMsg.Msg)
-					fmt.Printf("received message: %v, |%s|\n", cmdMsg, cmdMsg.Source)
+					//fmt.Printf("received message: %v, |%s|\n", cmdMsg, cmdMsg.Source)
 					// TODO check with IP addresses as well
 					if cmdMsg.Source == config.Config.Name {
 						break
@@ -132,18 +132,24 @@ func main() {
 			case "ls": {
 				// hit the cache
 				cachedList := fileListCache.GetAll()
-				fmt.Println(cachedList)
+				for u, m := range cachedList {
+					fmt.Println("======", u, "======")
+					for _, v := range m {
+						fmt.Printf("%s\t%s\t%d\n", v.FullHash, v.Name, v.Size)
+					}
+				}
 			}
 			case "get": {
 				if len(toks) > 1 {
 					fileFetchManager.ClientQ <- toks[1]
+					<-fileFetchManager.DownloadComplete
 				} else {
 					fmt.Println("get what?")
 				}
 			}
 			case "lls": {
 				for _, f := range fileController.ListLocalFiles() {
-					fmt.Println(f)
+					fmt.Printf("%s\t%s\t%d\n", f.FullHash, f.Name, f.Size)
 				}
 			}
 			case "lu": {
