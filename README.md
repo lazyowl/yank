@@ -19,3 +19,15 @@ There's been some rather chaotic initial development as I grapple with various d
 
 ####Run:
 `go run loop.go`
+
+To view the command line options, `go run loop.go -h`
+
+####Prompt syntax
+This may be just a temporary instruction set for now:
+```
+ls - list public files on the network
+lls - list local files
+lu - list users on the network
+get <hash> <dest> - get file with <hash> and save it as <dest> (if <dest> not provided, <hash> itself is used as the filename)
+q - quit
+```
