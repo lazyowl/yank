@@ -1,9 +1,6 @@
 #Yank
 Yank is a peer to peer file sharing system for LANs written in Go.
 
-######News Flash
-There's been some rather chaotic initial development as I grapple with various designs and golang best practices. I am slowly converging upon a stable design to build on though.
-
 ####Mostly Complete:
 
 * Basic networking capability - each machine runs a small server subscribed to a multicast network.
@@ -21,6 +18,9 @@ There's been some rather chaotic initial development as I grapple with various d
 `go run loop.go`
 
 To view the command line options, `go run loop.go -h`
+
+####Current Limitation
+The current implementation uses a 64 bit integer as a bit vector to store file chunk presence/absence. Therefore, file sizes are limited to 64 * CHUNK_SIZE.
 
 ####Prompt syntax
 This may be just a temporary instruction set for now:
