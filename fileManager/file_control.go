@@ -173,6 +173,7 @@ func (fc *FileController) CreateEmptyFile(name string, hash string, size int) (*
 	if err != nil {
 		return nil, err
 	}
+	f.FullHash = hash
 	f.HashBitVector = BitVectorZero()	// change to an all zeros bit vector
 	file.Close()
 	return f, nil
