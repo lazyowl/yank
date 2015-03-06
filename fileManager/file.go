@@ -64,31 +64,33 @@ func (f *MyFile) PercentComplete() int {
 }
 
 // WriteChunk writes chunk. It assumes file exists and has a valid size
-func (f *MyFile) WriteChunk(chunkPos int, data []byte) error {
+func (f *MyFile) WriteChunk(chunkPos int, data []byte, size int) error {
 	f.lock.Lock()
 	defer f.lock.Unlock()
+	trunc_data := data[:size]
 	_, seekErr := f.fileHandle.Seek(int64(chunkPos * CHUNK_SIZE), 0)
 	if seekErr != nil {
 		return seekErr
 	}
-	_, writeErr := f.fileHandle.Write(data)
+	_, writeErr := f.fileHandle.Write(trunc_data)
 	if writeErr != nil {
 		return writeErr
 	}
 	return nil
 }
 
-func (f *MyFile) ReadChunk(chunkPos int) ([]byte, error) {
+func (f *MyFile) ReadChunk(chunkPos int) ([]byte, int, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 	_, seekErr := f.fileHandle.Seek(int64(chunkPos * CHUNK_SIZE), 0)
 	b := make([]byte, CHUNK_SIZE)
 	if seekErr != nil {
-		return []byte{}, seekErr
+		return []byte{}, 0, seekErr
 	}
-	_, readErr := f.fileHandle.Read(b)
-	return b, readErr
+	n, readErr := f.fileHandle.Read(b)
+	return b, n, readErr
 }
+
 
 // Open opens file for writing
 func (f *MyFile) Open() error {

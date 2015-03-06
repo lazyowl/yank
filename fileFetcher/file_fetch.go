@@ -159,7 +159,7 @@ func (ff *FileFetcher) ManageFileFetch() {
 				}
 				localFile.Open()
 				for _, tuple := range fileResponse.ReturnedDataChunks {
-					err := localFile.WriteChunk(tuple.Position, tuple.Data)
+					err := localFile.WriteChunk(tuple.Position, tuple.Data, tuple.Size)
 					if err != nil {
 						fmt.Println("Write Err:", err)
 						continue
@@ -213,11 +213,11 @@ func (ff *FileFetcher) ManageFileFetch() {
 				data := []network.DataTuple{}
 				f.Open()
 				for _, pos := range cmdMsg.RequestedChunkNumbers {
-					b, err := f.ReadChunk(pos)
+					b, size, err := f.ReadChunk(pos)
 					if err != nil {
 						continue
 					} else {
-						data = append(data, network.NewDataTuple(pos, b))
+						data = append(data, network.NewDataTuple(pos, b, size))
 					}
 				}
 				f.Close()

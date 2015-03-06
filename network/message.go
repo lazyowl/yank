@@ -19,10 +19,11 @@ type Response struct {
 type DataTuple struct {
 	Position int
 	Data []byte
+	Size int
 }
 
-func NewDataTuple(pos int, dat []byte) DataTuple {
-	return DataTuple{pos, dat}
+func NewDataTuple(pos int, dat []byte, size int) DataTuple {
+	return DataTuple{pos, dat, size}
 }
 
 type CmdMessage struct {
