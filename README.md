@@ -13,6 +13,19 @@ Yank is a peer to peer file sharing system for LANs written in Go.
 ####To do:
 
 * Add a file index. Right now yank performs a readdir to get to the file in question based on one of its attributes
+* Force users' names to be unique across the LAN (currently no checking is done)
+
+####Config File Format
+The config file should be in JSON format. By default, Yank will look for a file named `config.txt` in the base directory of the repository.
+```
+{
+	"Name": "lazyowl",
+	"PublicDir": "public_dir",
+	"MetaDir": "meta_dir",
+	"PingInterval": 8
+}
+```
+
 
 ####Run:
 `go run loop.go`
