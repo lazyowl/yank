@@ -3,7 +3,6 @@ package fileManager
 // Type BitVector provides an interface to a bit vector
 type BitVector struct {
 	BitVec uint64
-	iter uint		// used for iteration, does not need to be exported
 }
 
 // SetBit

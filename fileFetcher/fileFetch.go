@@ -188,6 +188,7 @@ func (ff *FileFetcher) ManageFileFetch() {
 				potentialUserMap = fileListCache.GetExistingByHash(fileRequestHash)
 				if len(potentialUserMap) == 0 {
 					fmt.Println("Nobody has it!")
+					ff.DownloadComplete <- false
 					break
 				}
 				localFile = fileController.FileFromHash(fileRequestHash)
