@@ -11,7 +11,7 @@ Yank is a peer to peer file sharing system for LANs written in Go.
 * Kind of shows download stats when file download is complete; also new files can be downloaded too
 
 ####Current (Known) Limitations/Issues
-* **Important** The hash of the file should be updated when the file is modified. However, by doing so, other peers who were fetching data related to the file will now have their requests invalidated since the hash is different. This needs to be handled somehow.
+* **Important** The hash of the file should be updated when the file is modified. However, by doing so, other peers who were fetching data related to the file will now have their requests invalidated since the hash is different. This needs to be handled somehow. One possibility is to store chunk hashes for each file. When a file is to be fetched, fetch all of its chunk hashes first and then query those (rather than chunk positions). Does this even need to be handled? Maybe we should just abort the fetch if the file changes and start the whole thing all over again. May not be terribly efficient though.
 * The current implementation uses a 64 bit integer as a bit vector to store file chunk presence/absence. Therefore, file sizes are limited to 64 * CHUNK_SIZE.
 * It assumes that each user will have a unique name. Currently, it does not check for this.
 
